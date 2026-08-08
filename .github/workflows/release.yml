@@ -98,6 +98,19 @@ jobs:
           fi
           if ! git rev-parse -q --verify "refs/tags/v${RELEASE_VERSION}" >/dev/null 2>&1; then
             git tag "v${RELEASE_VERSION}"
+          else
+            # Tag exists: verify it resolves to the current release commit
+            # or to a commit already on this branch (a fully merged release
+            # being resumed after a failed publish). An orphaned tag from an
+            # interrupted run must not be silently reused while a different
+            # commit gets merged to main.
+            TAG_COMMIT="$(git rev-parse "refs/tags/v${RELEASE_VERSION}^{commit}")"
+            if git merge-base --is-ancestor "$TAG_COMMIT" HEAD 2>/dev/null; then
+              echo "Tag v${RELEASE_VERSION} already exists and resolves to a commit on this branch; reusing it."
+            else
+              echo "::error::Tag v${RELEASE_VERSION} exists but points to ${TAG_COMMIT}, a commit not on this branch. This is likely an orphaned tag from an interrupted run; delete the tag (git push origin :refs/tags/v${RELEASE_VERSION}) and re-run the workflow."
+              exit 1
+            fi
           fi
           # Only the tag is pushed here. The release commit itself lands on
           # main through the "Merge release commit to main" step below,
@@ -106,6 +119,58 @@ jobs:
       - name: Build binaries (macOS arm64 + x64)
         if: steps.versions.outputs.release_version != ''
         run: vp run build
+      - name: Merge release commit to main
+        # The Protect ruleset on main forbids direct pushes, so the release
+        # commit (package.json + CHANGELOG.md) is merged through a PR that
+        # this step opens, waits for CI on, and merges. This runs before
+        # publishing so npm and the GitHub release are only exposed once main
+        # actually contains the version/changelog commit.
+        if: steps.versions.outputs.release_version != ''
+        env:
+          RELEASE_VERSION: ${{ steps.versions.outputs.release_version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if git merge-base --is-ancestor HEAD origin/main 2>/dev/null; then
+            echo "Release commit is already on main; no PR needed."
+            exit 0
+          fi
+          BRANCH="release/v${RELEASE_VERSION}"
+          # Force-push: an interrupted prior run may have left this branch
+          # (and an attached PR) behind with an equivalent but different SHA.
+          git push --force origin "HEAD:refs/heads/${BRANCH}"
+          PR_URL="$(gh pr create --base main --head "${BRANCH}" \
+            --title "chore(release): v${RELEASE_VERSION}" \
+            --body "Automated release commit: bump package.json to v${RELEASE_VERSION} and regenerate CHANGELOG.md." \
+            2>/dev/null | tail -n 1 || true)"
+          if [ -z "$PR_URL" ]; then
+            PR_URL="$(gh pr view "${BRANCH}" --json url --jq .url 2>/dev/null || true)"
+          fi
+          if [ -z "$PR_URL" ]; then
+            # Fail loudly: a later run cannot retry the missing merge, because
+            # it would see the pushed tag / published state as "complete".
+            echo "::error::Could not create or find release PR ${BRANCH}; the release commit will not reach main. Fix the branch/PR and re-run the workflow."
+            exit 1
+          fi
+          # Auto-merge is disabled on this repo, so wait for the required CI
+          # check to pass and merge explicitly.
+          for i in $(seq 1 60); do
+            STATE="$(gh pr view "$PR_URL" --json statusCheckRollup --jq \
+              '[.statusCheckRollup[]? | select(.name == "Check, test, and build") | .conclusion] | .[0] // "PENDING"' 2>/dev/null || true)"
+            case "$STATE" in
+              SUCCESS)
+                gh pr merge "$PR_URL" --merge --delete-branch
+                exit 0
+                ;;
+              FAILURE|ERROR|CANCELLED)
+                echo "::error::CI check on release PR failed: ${STATE}"
+                exit 1
+                ;;
+            esac
+            sleep 10
+          done
+          echo "::error::Timed out waiting for CI on the release PR"
+          exit 1
       - name: Publish to npm (trusted publishing / OIDC)
         if: steps.versions.outputs.release_version != ''
         env:
@@ -135,51 +200,3 @@ jobs:
             gh release create "v${RELEASE_VERSION}" dist/iconsur-arm64 dist/iconsur-x64 \
               --notes-file CHANGELOG.md
           fi
-      - name: Merge release commit to main
-        # The Protect ruleset on main forbids direct pushes, so the release
-        # commit (package.json + CHANGELOG.md) is merged through a PR that
-        # this step opens, waits for CI on, and merges.
-        if: steps.versions.outputs.release_version != ''
-        env:
-          RELEASE_VERSION: ${{ steps.versions.outputs.release_version }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          if git merge-base --is-ancestor HEAD origin/main 2>/dev/null; then
-            echo "Release commit is already on main; no PR needed."
-            exit 0
-          fi
-          BRANCH="release/v${RELEASE_VERSION}"
-          # Force-push: an interrupted prior run may have left this branch
-          # (and an attached PR) behind with an equivalent but different SHA.
-          git push --force origin "HEAD:refs/heads/${BRANCH}"
-          PR_URL="$(gh pr create --base main --head "${BRANCH}" \
-            --title "chore(release): v${RELEASE_VERSION}" \
-            --body "Automated release commit: bump package.json to v${RELEASE_VERSION} and regenerate CHANGELOG.md." \
-            2>/dev/null | tail -n 1 || true)"
-          if [ -z "$PR_URL" ]; then
-            PR_URL="$(gh pr view "${BRANCH}" --json url --jq .url 2>/dev/null || true)"
-          fi
-          if [ -z "$PR_URL" ]; then
-            echo "::warning::Could not create or find release PR ${BRANCH}; main will be updated by the next release run."
-            exit 0
-          fi
-          # Auto-merge is disabled on this repo, so wait for the required CI
-          # check to pass and merge explicitly.
-          for i in $(seq 1 60); do
-            STATE="$(gh pr view "$PR_URL" --json statusCheckRollup --jq \
-              '[.statusCheckRollup[]? | select(.name == "Check, test, and build") | .conclusion] | .[0] // "PENDING"' 2>/dev/null || true)"
-            case "$STATE" in
-              SUCCESS)
-                gh pr merge "$PR_URL" --merge --delete-branch
-                exit 0
-                ;;
-              FAILURE|ERROR|CANCELLED)
-                echo "::error::CI check on release PR failed: ${STATE}"
-                exit 1
-                ;;
-            esac
-            sleep 10
-          done
-          echo "::error::Timed out waiting for CI on the release PR"
-          exit 1
