@@ -10,7 +10,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -20,17 +20,15 @@ jobs:
           node-version: "24"
           cache: true
           run-install: true
-      - name: Install git-cliff
-        uses: taiki-e/install-action@git-cliff
       - name: Configure Git identity
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-      - name: Compute next version
+      - name: Compute next version (git-cliff from devDependencies)
         id: versions
         run: |
           LAST_TAG="$(git describe --tags --abbrev=0 2>/dev/null || echo v0.0.0)"
-          NEXT_VERSION="$(git-cliff --config cliff.toml --bumped-version 2>/dev/null | tail -n 1)"
+          NEXT_VERSION="$(vp exec git-cliff --config cliff.toml --bumped-version 2>/dev/null | tail -n 1)"
           echo "last_tag=$LAST_TAG" >> "$GITHUB_OUTPUT"
           echo "next_version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
       - name: Skip docs-only / chore-only pushes
@@ -39,13 +37,13 @@ jobs:
       - name: Update version and changelog
         if: steps.versions.outputs.next_version != steps.versions.outputs.last_tag
         run: |
-          git-cliff --config cliff.toml --tag "v${{ steps.versions.outputs.next_version }}" -o CHANGELOG.md
+          vp exec git-cliff --config cliff.toml --tag "v${{ steps.versions.outputs.next_version }}" -o CHANGELOG.md
           npm version "${{ steps.versions.outputs.next_version }}" --no-git-tag-version
           git add package.json CHANGELOG.md
           git commit -m "chore(release): v${{ steps.versions.outputs.next_version }}"
           git tag "v${{ steps.versions.outputs.next_version }}"
           git push origin main --tags
-      - name: Build binaries (macOS / Linux / Windows x arm64 + x64)
+      - name: Build binaries (macOS arm64 + x64)
         if: steps.versions.outputs.next_version != steps.versions.outputs.last_tag
         run: vp run build
       - name: Publish to npm
@@ -60,9 +58,5 @@ jobs:
           tag_name: v${{ steps.versions.outputs.next_version }}
           body_path: CHANGELOG.md
           files: |
-            dist/iconsur-macos-arm64
-            dist/iconsur-macos-x64
-            dist/iconsur-linux-arm64
-            dist/iconsur-linux-x64
-            dist/iconsur-win-arm64.exe
-            dist/iconsur-win-x64.exe
+            dist/iconsur-arm64
+            dist/iconsur-x64

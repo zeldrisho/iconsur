@@ -55,7 +55,7 @@ Clears per-user icon caches under `/private/var/folders` (user-owned, no `sudo`)
 
 - Source: `node src/index.ts` (ESM, Node `>=22.18` type stripping; relative imports use literal `.ts` extensions).
 - Bundle: `vp pack` (tsdown) emits a single-CJS `dist/index.cjs` with all dependencies inlined (pkg cannot load external ESM like `plist@5`).
-- Binary: `@yao-pkg/pkg` (`-c .pkgrc.json`) targets `node24` for macOS, Linux, and Windows × arm64 + x64 (`dist/iconsur-<platform>-<arch>[.exe]`); `package.json` and `src/mask.png` are mounted as snapshot assets. Only macOS has full functionality — `set`/`unset`/`cache` depend on `osascript`/`xattr`/`killall`, which ship with macOS.
+- Binary: `@yao-pkg/pkg` (`-c .pkgrc.json`) targets `node24` for macOS arm64 + x64 (`dist/iconsur-arm64`, `dist/iconsur-x64`); `package.json` and `src/mask.png` are mounted as snapshot assets.
 - Assets (`src/assets.ts`) resolve across all three layouts via `import.meta.dirname` (source), `__dirname` (bundle), and the pkg snapshot paths.
 
 ## Failure modes

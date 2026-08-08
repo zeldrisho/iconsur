@@ -32,7 +32,7 @@ Requires Node.js `>=22.18` (the CLI runs as TypeScript source via Node's built-i
 
 ## Usage
 
-Download the `iconsur` binary for your platform (macOS, Linux, or Windows; arm64 or x64) from [Releases](https://github.com/zeldrisho/iconsur/releases), `chmod +x` (macOS/Linux) and include it in your PATH.
+Download the `iconsur` binary for macOS (arm64 or x64) from [Releases](https://github.com/zeldrisho/iconsur/releases), `chmod +x` and include it in your PATH.
 
 Start generating your first adaptive app icon:
 
@@ -109,11 +109,6 @@ Answer anything other than `y` to keep the original icon; the generated preview 
 ## Example
 
 See the original author's [personal iconsur setup](https://gist.github.com/rikumi/e2ac39882a7dcd29642f29343da5a54a) as an example.
-
-### Platform notes
-
-- **macOS**: full functionality (`set`/`unset`/`cache`) — the icon apply step uses `osascript`/`xattr`, which ship with macOS.
-- **Linux / Windows**: the binaries are published for convenience and support the icon-generation pipeline (`set ... -o out.png`, `--help`); `set`/`unset`/`cache` require macOS system services and will error there.
 
 ## Installation channels
 

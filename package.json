@@ -16,7 +16,7 @@
   ],
   "type": "module",
   "scripts": {
-    "build": "vp pack && cp src/mask.png dist/ && rm -f dist/iconsur-* && pkg -c .pkgrc.json dist/index.cjs --targets node24-macos-arm64,node24-macos-x64,node24-linux-x64,node24-linux-arm64,node24-win-x64,node24-win-arm64 --output dist/iconsur",
+    "build": "vp pack && cp src/mask.png dist/ && rm -f dist/iconsur-* && pkg -c .pkgrc.json dist/index.cjs --targets node24-macos-arm64,node24-macos-x64 --output dist/iconsur",
     "check": "vp check",
     "test": "vp test"
   },
@@ -31,6 +31,7 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@yao-pkg/pkg": "^6.22.0",
+    "git-cliff": "^2.13.1",
     "tsdown": "^0.22.14",
     "typescript": "^7.0.2",
     "vite-plus": "^0.2.8",

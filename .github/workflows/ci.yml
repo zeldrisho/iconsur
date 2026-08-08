@@ -9,7 +9,7 @@ jobs:
     name: Check, test, and build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Vite+ (vp)
         uses: voidzero-dev/setup-vp@v1.17.0
         with:
@@ -20,5 +20,5 @@ jobs:
         run: vp check
       - name: Tests
         run: vp test
-      - name: Build binaries (all platforms)
+      - name: Build binaries (macOS arm64 + x64)
         run: vp run build

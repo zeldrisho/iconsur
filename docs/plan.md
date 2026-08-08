@@ -61,7 +61,7 @@ Research 2026-08 — versions verified against the npm registry; API claims veri
 - [x] **jimp 0.x → 1.x** — migrated in `src/icon.ts`: `Jimp.read` retained, `write` replaces `writeAsync`, `new Jimp({ width, height, color })` constructor, `resize`/`contain`/`cover` take `{ w, h }` option objects (floats are rounded internally), `composite(src, x, y)` positional, `scan`/`hasAlpha`/`getPixelColor`/`setPixelColor` retained.
 - [x] **JP2 decoder registration** — registered as a 1.x format plugin (`{ mime, hasAlpha, encode, decode }`) in `src/jimp.ts` via `createJimp` from `@jimp/core` (direct dep; the `jimp` ESM entry does not export it). Decoder body (Planar-RGB→RGBA remap) moved into `jimp.ts` (`decodeJp2`); `file-type` detects `image/jp2` and jimp routes it to the custom format.
 - [x] **`pkg` replacement** — `@yao-pkg/pkg` 6.22.0. Pipeline: `vp pack` (tsdown single-CJS, all deps inlined — pkg cannot load external ESM like `plist@5`) → `pkg -c .pkgrc.json dist/index.cjs --targets node22-macos-arm64,node22-macos-x64`. Assets (`package.json`, `src/mask.png`, `dist/mask.png`) mounted via `.pkgrc.json`. Node SEA remains an evaluated alternative.
-- [x] Node floor (`>=22.18`) gates engines; pkg targets `node24-*` (current LTS — verified fetchable via `@yao-pkg/pkg`) for **macOS, Linux, Windows × arm64 + x64** (six binaries; Linux/Windows support the generation pipeline only). CI Node is 24 via setup-vp.
+- [x] Node floor (`>=22.18`) gates engines; pkg targets `node24-*` (current LTS — verified fetchable via `@yao-pkg/pkg`) for **macOS arm64 + x64** (maintainer decision 2026-08: Linux/Windows builds not needed). CI Node is 24 via setup-vp.
 
 ## 4. Vite+ (vp) adoption (P1)
 
@@ -98,7 +98,7 @@ Mirror the `pi-packages` release setup (see `docs/release.md`) scaled to one pac
 ## 7. CI modernization (P1)
 
 - [x] Add PR status-check workflow (`ci.yml`): `pull_request` + push to `main` → `voidzero-dev/setup-vp` (Node 24, cache, install) → `vp check`, `vp test`, `vp run build`.
-- [x] `actions/checkout@v6` + `voidzero-dev/setup-vp@v1.17.0` (pinned tags; Dependabot-friendly). Node 24 LTS set via `node-version` input — the `.node-version` file was dropped (the pin lives in `package.json#devEngines.runtime`). `@yao-pkg/pkg` cross-compiles all six targets from `ubuntu-latest`.
+- [x] `actions/checkout@v7` + `voidzero-dev/setup-vp@v1.17.0` (exact tag: setup-vp's moving `v1` is frozen at v1.15.0 per upstream docs — do not use it). Node 24 LTS via `node-version` input; `.node-version` dropped (pin lives in `package.json#devEngines.runtime`). `@yao-pkg/pkg` cross-compiles macOS targets from `ubuntu-latest`.
 - [x] macOS-specific verification (`set`/`cache` can't run on ubuntu) stays manual/on-device — item 8.
 - [ ] Enable branch protection on `main` (GitHub settings): require the status check, a PR review, and up-to-date branches; optionally enforce conventional commits via commitlint (already local, item 5).
 

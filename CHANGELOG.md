@@ -15,6 +15,7 @@ All notable changes to this project are documented in this file.
 - Regenerate CHANGELOG with tagged v1.7.0 history
 - Test hook cleanup
 - Remove hook test file
+- Regenerate CHANGELOG and exclude it from staged formatting
 
 ### Documentation
 
