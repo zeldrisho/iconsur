@@ -21,18 +21,19 @@ Tag format is `v<version>` (single package, no component prefix). `cliff.toml` h
 - Rebase work branches onto their target; never merge the target branch into them.
 - Commit messages should be conventional (git-cliff depends on them for versioning); they are no longer enforced by a hook.
 
-## Release procedure (automated)
+## Release procedure
 
-No manual release or publish steps (except the very first npm publish, which the workflow performs with `--access public`):
+The Protect ruleset forbids direct pushes to `main`, and the workflow never auto-merges the release commit — a human merges the release PR:
 
 1. Write conventional commits, open a PR, run `vp check` / `vp test`.
 2. Merge the PR to `main`.
 3. `.github/workflows/release.yml` (on push to `main`):
    - computes the next version from the latest tag with git-cliff (a devDependency — no separate install step),
-   - regenerates `CHANGELOG.md`, bumps `package.json`, commits and tags `v<version>`,
-   - builds the binaries (`vp pack` → `@yao-pkg/pkg`, macOS arm64 + x64),
-   - publishes `@zeldrisho/iconsur` to npm (`--access public`),
-   - creates a GitHub release with `dist/iconsur-arm64` / `dist/iconsur-x64` attached.
+   - regenerates `CHANGELOG.md`, bumps `package.json`, commits and tags `v<version>`. Only the tag is pushed;
+   - builds the binaries (`vp pack` → `@yao-pkg/pkg`, macOS arm64 + x64);
+   - opens PR `release/vX.Y.Z` and waits for the `Check, test, and build` check, then stops.
+4. Merge the release PR manually with **Create a merge commit** (not squash/rebase, so the tag keeps pointing at the commit on `main`).
+5. That merge pushes to `main` and triggers the follow-up run, which resumes the release idempotently (no duplicate commit/tag), then publishes `@zeldrisho/iconsur` to npm (`--access public`) and creates a GitHub release with `dist/iconsur-arm64` / `dist/iconsur-x64` attached. GitHub release notes cover only the new version (the first `## [v…]` section of `CHANGELOG.md`), not the full history.
 
 A push with only docs/chore/refactor commits skips the release (the workflow compares `git-cliff --bumped-version` against the latest tag).
 
@@ -48,3 +49,9 @@ Escalation: pause and investigate (do not manually patch) if npm, GitHub, tags, 
 - Homebrew formula is deprecated (upstream archived) and disabled 2027-02-01; no fork tap is maintained — see `docs/plan.md`.
 - Binaries target Node 24 (LTS) for macOS arm64 + x64.
 - Conventional commit messages are expected (git-cliff versioning) but not enforced by a hook; non-conventional commits are skipped by git-cliff with a warning. If this bites, reinstate `.vite-hooks/commit-msg` with `vp exec commitlint -e`.
+
+## References
+
+- [git-cliff documentation](https://git-cliff.org/docs/) — changelog generation, `cliff.toml` configuration (commit parsers, bump rules), and the git-cliff CLI. Note: the docs live on `git-cliff.org`; `git-cliff.com` does not resolve.
+- [git-cliff GitHub repository](https://github.com/orhun/git-cliff)
+
