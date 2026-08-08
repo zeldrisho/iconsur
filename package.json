@@ -16,7 +16,7 @@
   ],
   "type": "module",
   "scripts": {
-    "build": "vp pack && cp src/mask.png dist/ && pkg -c .pkgrc.json dist/index.cjs --targets node22-macos-arm64,node22-macos-x64 --output dist/iconsur",
+    "build": "vp pack && cp src/mask.png dist/ && rm -f dist/iconsur-* && pkg -c .pkgrc.json dist/index.cjs --targets node24-macos-arm64,node24-macos-x64,node24-linux-x64,node24-linux-arm64,node24-win-x64,node24-win-arm64 --output dist/iconsur",
     "check": "vp check",
     "test": "vp test"
   },
@@ -29,19 +29,12 @@
     "plist": "^5.0.0"
   },
   "devDependencies": {
-    "@commitlint/cli": "^21.2.1",
-    "@commitlint/config-conventional": "^21.2.0",
     "@types/node": "^24.0.0",
     "@yao-pkg/pkg": "^6.22.0",
     "tsdown": "^0.22.14",
     "typescript": "^7.0.2",
     "vite-plus": "^0.2.8",
     "vitest": "^4.1.10"
-  },
-  "commitlint": {
-    "extends": [
-      "@commitlint/config-conventional"
-    ]
   },
   "devEngines": {
     "packageManager": {

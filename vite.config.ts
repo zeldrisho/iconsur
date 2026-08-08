@@ -1,8 +1,6 @@
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
-  // Vendored Emscripten artifact: excluded from lint (tsc already skips it via
-  // @ts-nocheck) — regenerating it from OpenJPEG is the only sanctioned edit.
   lint: {
     // Type-check with the project tsconfig (includes tsc --noEmit diagnostics).
     options: {
@@ -13,12 +11,21 @@ export default defineConfig({
     // via @ts-nocheck) — regenerating it from OpenJPEG is the only sanctioned edit.
     ignorePatterns: ["src/openjpeg.ts"],
   },
+  // Generated artifacts are excluded from formatting: CHANGELOG.md is produced
+  // by git-cliff and must ship byte-identical to what the release workflow writes.
+  fmt: {
+    ignorePatterns: ["CHANGELOG.md"],
+  },
   // Staged-file checks for the pre-commit hook (see .vite-hooks/pre-commit).
+  // CHANGELOG.md is excluded via fmt.ignorePatterns above, so `vp fmt` leaves
+  // the git-cliff-generated file untouched.
   staged: {
     "*.ts": "vp check --fix",
-    "*.{json,md,toml,yml}": "vp fmt",
+    "*.{json,toml,yml}": "vp fmt",
+    "*.md": "vp fmt",
   },
-  // Vitest configuration for `vp test`.
+  // Vitest configuration for `vp test` (vite-plus bundles the runner; the
+  // `vitest` package itself is not a project dependency).
   test: {
     include: ["tests/**/*.test.ts"],
   },

@@ -10,18 +10,16 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           fetch-tags: true
-      - uses: actions/setup-node@v4
+      - name: Set up Vite+ (vp)
+        uses: voidzero-dev/setup-vp@v1.17.0
         with:
-          node-version-file: .node-version
-          cache: pnpm
-      - name: Enable pnpm
-        run: corepack enable
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          node-version: "24"
+          cache: true
+          run-install: true
       - name: Install git-cliff
         uses: taiki-e/install-action@git-cliff
       - name: Configure Git identity
@@ -47,9 +45,9 @@ jobs:
           git commit -m "chore(release): v${{ steps.versions.outputs.next_version }}"
           git tag "v${{ steps.versions.outputs.next_version }}"
           git push origin main --tags
-      - name: Build binaries (x64 + arm64)
+      - name: Build binaries (macOS / Linux / Windows x arm64 + x64)
         if: steps.versions.outputs.next_version != steps.versions.outputs.last_tag
-        run: pnpm run build
+        run: vp run build
       - name: Publish to npm
         if: steps.versions.outputs.next_version != steps.versions.outputs.last_tag
         run: npm publish --access public
@@ -62,5 +60,9 @@ jobs:
           tag_name: v${{ steps.versions.outputs.next_version }}
           body_path: CHANGELOG.md
           files: |
-            dist/iconsur-arm64
-            dist/iconsur-x64
+            dist/iconsur-macos-arm64
+            dist/iconsur-macos-x64
+            dist/iconsur-linux-arm64
+            dist/iconsur-linux-x64
+            dist/iconsur-win-arm64.exe
+            dist/iconsur-win-x64.exe
