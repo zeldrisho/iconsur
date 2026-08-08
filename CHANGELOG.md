@@ -3,12 +3,22 @@
 All notable changes to this project are documented in this file.
 
 
-## [unreleased]
+## [2.0.0](https://github.com/zeldrisho/iconsur/releases/tag/v2.0.0) - 2026-08-08
+
+### Bug Fixes
+
+- Address review findings on the trusted-publishing pipeline
+- Normalize version prefix in the release workflow (`release`)
+- Use pnpm for version/view/publish to avoid npm EBADDEVENGINES (`release`)
+- Compute versions from tags and merge release commit via PR (`release`)
+- Address review findings on PR merge flow (`release`)
 
 ### Build
 
 - Adopt vp toolchain, commit hooks, and git-cliff release pipeline
 - Setup-vp CI, node24 six-platform binaries, drop commitlint
+- Macos-only binaries, git-cliff as devDependency, checkout@v7
+- Publish via npm trusted publishing (OIDC) without tokens
 
 ### Chore
 
@@ -16,6 +26,7 @@ All notable changes to this project are documented in this file.
 - Test hook cleanup
 - Remove hook test file
 - Regenerate CHANGELOG and exclude it from staged formatting
+- Import vitest through vite-plus and pin it to the bundled version
 
 ### Documentation
 
