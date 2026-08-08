@@ -58,7 +58,7 @@ jobs:
             # release (e.g. a previous run failed after pushing it).
             NPM_PUBLISHED="false"
             GH_RELEASED="false"
-            npm view "@zeldrisho/iconsur@${LAST_TAG}" version >/dev/null 2>&1 && NPM_PUBLISHED="true"
+            vp exec pnpm view "@zeldrisho/iconsur@${LAST_TAG}" version >/dev/null 2>&1 && NPM_PUBLISHED="true"
             gh release view "v${LAST_TAG}" >/dev/null 2>&1 && GH_RELEASED="true"
             if [ "$NPM_PUBLISHED" != "true" ] || [ "$GH_RELEASED" != "true" ]; then
               RELEASE_VERSION="$LAST_TAG"
@@ -82,7 +82,11 @@ jobs:
         run: |
           set -euo pipefail
           vp exec git-cliff --config cliff.toml --tag "v${RELEASE_VERSION}" -o CHANGELOG.md
-          npm version "$RELEASE_VERSION" --no-git-tag-version
+          # pnpm's native version command (no npm CLI delegation, so npm's
+          # devEngines EBADDEVENGINES check never runs). --no-git-checks:
+          # git-cliff just dirtied the working tree above; we create the
+          # commit and tag ourselves in this step.
+          vp exec pnpm version "$RELEASE_VERSION" --no-git-tag-version --no-git-checks
           git add package.json CHANGELOG.md
           if git diff --cached --quiet; then
             echo "Version and changelog already committed by a prior run; not creating a duplicate commit."
@@ -100,15 +104,17 @@ jobs:
         if: steps.versions.outputs.release_version != ''
         env:
           RELEASE_VERSION: ${{ steps.versions.outputs.release_version }}
-        # No NODE_AUTH_TOKEN here: setting it would make npm use the legacy
-        # token path instead of the OIDC trusted publisher. The npm CLI
-        # detects the GitHub Actions OIDC environment automatically.
+        # No NODE_AUTH_TOKEN here: setting it would make the package manager
+        # use the legacy token path instead of the OIDC trusted publisher.
+        # pnpm 11's native publish detects the GitHub Actions OIDC environment
+        # and exchanges an id-token for npm credentials automatically
+        # (audience npm:registry.npmjs.org), same as the npm CLI.
         run: |
           set -euo pipefail
-          if npm view "@zeldrisho/iconsur@${RELEASE_VERSION}" version >/dev/null 2>&1; then
+          if vp exec pnpm view "@zeldrisho/iconsur@${RELEASE_VERSION}" version >/dev/null 2>&1; then
             echo "v${RELEASE_VERSION} is already published to npm; skipping."
           else
-            npm publish --access public
+            vp exec pnpm publish --access public --no-git-checks
           fi
       - name: Create GitHub release
         if: steps.versions.outputs.release_version != ''
