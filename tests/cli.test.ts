@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { buildProgram } from "../src/cli.ts";
 import { Jimp } from "../src/jimp.ts";
 import { resolveIdentity } from "../src/icon.ts";

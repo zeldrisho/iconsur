@@ -1,2 +1,7 @@
 allowBuilds:
   esbuild: true
+# Pin vitest to the exact version bundled by vite-plus (vp --version) so the
+# whole project shares a single Vitest copy with the `vp test` runner. An
+# out-of-date pin would split Vitest's internals after a vite-plus upgrade.
+overrides:
+  vitest: 4.1.10

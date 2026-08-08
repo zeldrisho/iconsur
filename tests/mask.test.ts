@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { applyMask } from "../src/icon.ts";
 import { Jimp } from "../src/jimp.ts";
 import { resolveAsset } from "../src/assets.ts";

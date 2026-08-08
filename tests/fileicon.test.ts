@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { clearCustomIconFlag, SET_ICON_SCRIPT } from "../src/fileicon.ts";
 
 describe("fileicon osascript argv construction", () => {

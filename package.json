@@ -34,8 +34,7 @@
     "git-cliff": "^2.13.1",
     "tsdown": "^0.22.14",
     "typescript": "^7.0.2",
-    "vite-plus": "^0.2.8",
-    "vitest": "^4.1.10"
+    "vite-plus": "^0.2.8"
   },
   "devEngines": {
     "packageManager": {

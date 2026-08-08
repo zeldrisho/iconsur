@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { PER_USER_CACHE_FIND, SYSTEM_ICON_SERVICES_STORE } from "../src/cache.ts";
 
 describe("cache command construction", () => {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { decodeJp2, Jimp } from "../src/jimp.ts";
 import { TINY_JP2_BASE64 } from "./jp2-fixture.ts";
 
