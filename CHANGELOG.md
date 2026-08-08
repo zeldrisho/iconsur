@@ -3,6 +3,16 @@
 All notable changes to this project are documented in this file.
 
 
+## [2.2.0](https://github.com/zeldrisho/iconsur/releases/tag/v2.2.0) - 2026-08-08
+
+### Bug Fixes
+
+- Apply CodeRabbit auto-fixes
+
+### Features
+
+- Support bare app bundles and legacy ICNS icons
+
 ## [2.1.0](https://github.com/zeldrisho/iconsur/releases/tag/v2.1.0) - 2026-08-08
 
 ### Bug Fixes
