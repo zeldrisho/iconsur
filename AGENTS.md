@@ -21,7 +21,7 @@
 - Before implementation, run `git fetch --prune`, inspect local and upstream state, and start from the latest target branch without discarding uncommitted work.
 - Delete a completed local branch only when it is merged into its target and its upstream branch is gone.
 - pnpm is the canonical package manager; the stale `package-lock.json` is removed (in `.gitignore`).
-- Write conventional commits; git-cliff drives versioning and `CHANGELOG.md` (see `docs/release.md`). Commit hooks (`.vite-hooks/`) enforce this; opt out with `VP_GIT_HOOKS=0`.
+- Write conventional commits; git-cliff drives versioning and `CHANGELOG.md` (see `docs/release.md`). The pre-commit hook (`.vite-hooks/pre-commit`) runs staged checks; opt out with `VP_GIT_HOOKS=0`.
 - Docs-only sessions: never touch code or config; record changes in `docs/plan.md`.
 
 ## References

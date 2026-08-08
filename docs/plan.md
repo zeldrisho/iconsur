@@ -4,7 +4,7 @@ Registry for code/config changes deferred from docs-only sessions. Each entry re
 
 Legend: `[ ]` planned · `[~]` in progress · `[x]` done
 
-Status (2026-08): **implemented** — full TypeScript 7 migration landed (zero `.js`/`.sh` in the repo), vp-native pre-commit + commitlint hooks active, sudo-free `cache`/`set`, git-cliff release pipeline wired. Remaining manual steps: branch protection on `main` (item 7) and re-verify npm badge URLs after the first publish (item 1).
+Status (2026-08): **implemented** — full TypeScript 7 migration landed (zero `.js`/`.sh` in the repo), vp-native pre-commit hook active (commitlint removed by maintainer request), sudo-free `cache`/`set` with preview-before-apply, fully automated git-cliff release pipeline (no manual release/publish except the first npm publish), six cross-platform binaries. Remaining manual steps: branch protection on `main` (item 7) and re-verify npm badge URLs after the first publish (item 1).
 
 ---
 
@@ -12,7 +12,7 @@ Status (2026-08): **implemented** — full TypeScript 7 migration landed (zero `
 
 - [x] `package.json`: `name` → `@zeldrisho/iconsur`, `repository.url` → `https://github.com/zeldrisho/iconsur`. First scoped publish needs `npm publish --access public` (release workflow passes it).
 - [x] README: fork banner added, `brew` install removed, npm install line + badges + Releases link point at `@zeldrisho/iconsur` / this fork. (Re-verify badge URLs after first publish.)
-- [x] LICENSE retained as-is: MIT, © 2020 Rikumi Yu. MIT requires keeping the upstream copyright notice when publishing the fork — never remove it or relicense.
+- [x] LICENSE: MIT, © 2020 Rikumi Yu **+ © 2026 Zeldris** (upstream notice retained — MIT requires it; never remove or relicense).
 
 **Why:** npm/Homebrew/CI all still resolve to the dead upstream; Homebrew formula is deprecated and disabled 2027-02-01.
 
@@ -61,16 +61,16 @@ Research 2026-08 — versions verified against the npm registry; API claims veri
 - [x] **jimp 0.x → 1.x** — migrated in `src/icon.ts`: `Jimp.read` retained, `write` replaces `writeAsync`, `new Jimp({ width, height, color })` constructor, `resize`/`contain`/`cover` take `{ w, h }` option objects (floats are rounded internally), `composite(src, x, y)` positional, `scan`/`hasAlpha`/`getPixelColor`/`setPixelColor` retained.
 - [x] **JP2 decoder registration** — registered as a 1.x format plugin (`{ mime, hasAlpha, encode, decode }`) in `src/jimp.ts` via `createJimp` from `@jimp/core` (direct dep; the `jimp` ESM entry does not export it). Decoder body (Planar-RGB→RGBA remap) moved into `jimp.ts` (`decodeJp2`); `file-type` detects `image/jp2` and jimp routes it to the custom format.
 - [x] **`pkg` replacement** — `@yao-pkg/pkg` 6.22.0. Pipeline: `vp pack` (tsdown single-CJS, all deps inlined — pkg cannot load external ESM like `plist@5`) → `pkg -c .pkgrc.json dist/index.cjs --targets node22-macos-arm64,node22-macos-x64`. Assets (`package.json`, `src/mask.png`, `dist/mask.png`) mounted via `.pkgrc.json`. Node SEA remains an evaluated alternative.
-- [x] Node floor (`>=22.18`) gates the CI Node bump and pkg targets — set in `engines`; CI uses `.node-version` (24.19.0); pkg targets `node22-*`.
+- [x] Node floor (`>=22.18`) gates engines; pkg targets `node24-*` (current LTS — verified fetchable via `@yao-pkg/pkg`) for **macOS, Linux, Windows × arm64 + x64** (six binaries; Linux/Windows support the generation pipeline only). CI Node is 24 via setup-vp.
 
 ## 4. Vite+ (vp) adoption (P1)
 
 Current state: `vp v0.2.8` at `~/.vite-plus/bin/vp`; project **not** migrated (no local `vite-plus`, no `vite.config.ts`). `iconsur` runs as a vp-managed global package (`~/.vite-plus/packages/iconsur`, Node 24.19.0).
 
-- [x] Declare `packageManager: pnpm@…` + `devEngines.packageManager`; pin Node with `vp env pin` (writes `.node-version`) so `vp env` and CI agree.
+- [x] Declare `devEngines.packageManager` + `devEngines.runtime` (Node 24.19.0 pinned via `vp env pin`); `.node-version` dropped by maintainer request — CI sets Node 24 via setup-vp.
 - [x] Standardize on `vp install` / `vp add` / `vp update`; `git rm` stale `package-lock.json`, keep it in `.gitignore` (already listed).
 - [x] Add `vite.config.ts` (`defineConfig` from `vite-plus`): `staged` block (item 5), vitest config, tsdown entry for `vp pack`.
-- [x] `vp check` (oxfmt + oxlint + `tsc --noEmit`) and `vp test` (vitest, zero tests today — add: JP2 decode roundtrip, mask compositing, plist fallback parsing, `fileicon.ts` osascript argv construction, commander arg parsing, cache command construction). Wire both into CI (item 7).
+- [x] `vp check` (oxfmt + oxlint + tsc diagnostics via `typeCheck`) and `vp test` (vitest via vite-plus-bundled runner; the `vitest` devDep only supplies types for test files). `CHANGELOG.md` excluded from auto-format via `fmt.ignorePatterns`. Tests: JP2 decode roundtrip, mask compositing, plist fallback parsing, `fileicon.ts` osascript argv construction, commander arg parsing, cache command construction. Wired into CI (item 7).
 - [x] `vp pack` (tsdown) is the single-CJS bundle step feeding the binary (item 3); `vp pm publish` is the npm publish path (item 6).
 - [x] Do **not** run `vp migrate` blindly: it rewrites scripts/imports and assumes a Vite app. This is a plain CLI; targeted adoption only.
 
@@ -80,7 +80,7 @@ vp-native, no husky/lint-staged. Verified against viteplus.dev/guide/commit-hook
 
 - [x] Run `vp config` to install the hook dispatcher (project-owned hooks live in `.vite-hooks/`, dispatcher + shims in `.vite-hooks/_`, gitignored). **Run with `--no-agent`** so vp does not rewrite coding-agent instruction files (see item 11).
 - [x] `.vite-hooks/pre-commit` (committed) runs `vp staged`; `vite.config.ts` `staged` block: `'*.ts': 'vp check --fix'`, `'*.{json,md,toml,yml}': 'vp fmt'`.
-- [x] commit-msg lint: add `.vite-hooks/commit-msg` running `@commitlint/cli` (`commitlint -e`) with a conventional-commits config — git-cliff (item 6) depends on clean commit messages. Verify the dispatcher covers `commit-msg`; if not, add a plain hook via `core.hooksPath`.
+- [x] ~~commit-msg lint~~ **removed by maintainer decision** (2026-08): no commitlint; conventional messages remain a convention, and git-cliff skips non-conventional commits with a warning.
 - [x] `VP_GIT_HOOKS=0` documented as the opt-out (CI commits, tooling).
 
 **Acceptance:** `git commit` with an unformatted `.ts` file or a non-conventional message is blocked; staged-only enforcement (unstaged changes untouched).
@@ -97,8 +97,8 @@ Mirror the `pi-packages` release setup (see `docs/release.md`) scaled to one pac
 
 ## 7. CI modernization (P1)
 
-- [x] Add PR status-check workflow (`ci.yml`): `pull_request` + push to `main` → `vp install --frozen-lockfile`, `vp check`, `vp test`, `vp run build`. Today the only CI is the push-only release pipeline, so PRs have no gates.
-- [x] Bump `actions/checkout@v2` / `actions/setup-node@v1` → `@v4`; pin semantic versions (Dependabot-friendly). Replace Node 10.x with the `.node-version` pin (Node 24.19.0) via `setup-node` + `vp env` or a version matrix; `pkg`/yao-pkg cross-compiles macOS targets from `ubuntu-latest`.
+- [x] Add PR status-check workflow (`ci.yml`): `pull_request` + push to `main` → `voidzero-dev/setup-vp` (Node 24, cache, install) → `vp check`, `vp test`, `vp run build`.
+- [x] `actions/checkout@v6` + `voidzero-dev/setup-vp@v1.17.0` (pinned tags; Dependabot-friendly). Node 24 LTS set via `node-version` input — the `.node-version` file was dropped (the pin lives in `package.json#devEngines.runtime`). `@yao-pkg/pkg` cross-compiles all six targets from `ubuntu-latest`.
 - [x] macOS-specific verification (`set`/`cache` can't run on ubuntu) stays manual/on-device — item 8.
 - [ ] Enable branch protection on `main` (GitHub settings): require the status check, a PR review, and up-to-date branches; optionally enforce conventional commits via commitlint (already local, item 5).
 

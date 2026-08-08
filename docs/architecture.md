@@ -15,6 +15,7 @@ Global options (defined on the `commander` program, valid for `set`):
 | `-c, --color <hex>`       | Background color                                     | `ffffff`         |
 | `-i, --input <path>`      | Use a custom source image instead of the app's ICNS  | —                |
 | `-o, --output <path>`     | Write the PNG to a file instead of applying it       | —                |
+| `-y, --yes`               | Apply without the interactive confirmation prompt    | off              |
 
 Subcommands:
 
@@ -31,7 +32,7 @@ Subcommands:
    and download `artworkUrl512` (falling back to `artworkUrl100`). If no result, fall through to local generation.
 4. **Local generation** — read the ICNS, extract the largest embedded image with `icns-lib`; JP2 payloads are decoded by the vendored `openjpeg.ts` via the custom format plugin registered in `src/jimp.ts` (`createJimp` from `@jimp/core` with a decoder-only `image/jp2` format — jimp 0.x's global `jimp.decoders` mutation no longer exists). Opaque icons are `cover`-filled to the icon box; alpha icons are `contain`-ed at the requested scale (jimp 1.x option-object API: `{ w, h }`).
 5. **Compose the canvas** — create a 1024×1024 image, fill with the background color, composite the icon at 100px padding (icon box = 824×824), then apply `mask.png` with a per-pixel AND (`mask & pixel`), which rounds the corners.
-6. **Apply** — write to a temp PNG, then `fileicon.ts set <appDir> <png>`, or write to `--output` (coerced to `.png`).
+6. **Apply** — write to a temp PNG, then show the preview path and ask for confirmation in an interactive terminal (`-y/--yes` skips; non-interactive runs apply directly), then `fileicon.ts set <appDir> <png>`. Declining keeps the original icon and leaves the preview on disk. `--output` (coerced to `.png`) skips the prompt entirely.
 
 ## fileicon (native)
 
@@ -54,7 +55,7 @@ Clears per-user icon caches under `/private/var/folders` (user-owned, no `sudo`)
 
 - Source: `node src/index.ts` (ESM, Node `>=22.18` type stripping; relative imports use literal `.ts` extensions).
 - Bundle: `vp pack` (tsdown) emits a single-CJS `dist/index.cjs` with all dependencies inlined (pkg cannot load external ESM like `plist@5`).
-- Binary: `@yao-pkg/pkg` (`-c .pkgrc.json`) targets `node22-macos-arm64` + `node22-macos-x64`; `package.json` and `src/mask.png` are mounted as snapshot assets.
+- Binary: `@yao-pkg/pkg` (`-c .pkgrc.json`) targets `node24` for macOS, Linux, and Windows × arm64 + x64 (`dist/iconsur-<platform>-<arch>[.exe]`); `package.json` and `src/mask.png` are mounted as snapshot assets. Only macOS has full functionality — `set`/`unset`/`cache` depend on `osascript`/`xattr`/`killall`, which ship with macOS.
 - Assets (`src/assets.ts`) resolve across all three layouts via `import.meta.dirname` (source), `__dirname` (bundle), and the pkg snapshot paths.
 
 ## Failure modes

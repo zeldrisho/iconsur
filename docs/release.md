@@ -19,18 +19,22 @@ Tag format is `v<version>` (single package, no component prefix). `cliff.toml` h
 - Do not merge feature branches that already carry a bumped `package.json` version; let git-cliff propose the version and changelog.
 - Before implementation, run `git fetch --prune`, inspect local and upstream state, and start from the latest target branch without discarding uncommitted work.
 - Rebase work branches onto their target; never merge the target branch into them.
-- Commit messages are enforced locally by commitlint (`.vite-hooks/commit-msg`); git-cliff depends on them being conventional.
+- Commit messages should be conventional (git-cliff depends on them for versioning); they are no longer enforced by a hook.
 
 ## Release procedure (automated)
+
+No manual release or publish steps (except the very first npm publish, which the workflow performs with `--access public`):
 
 1. Write conventional commits, open a PR, run `vp check` / `vp test`.
 2. Merge the PR to `main`.
 3. `.github/workflows/release.yml` (on push to `main`):
    - installs git-cliff, computes the next version from the latest tag,
    - regenerates `CHANGELOG.md`, bumps `package.json`, commits and tags `v<version>`,
-   - builds the binaries (`vp pack` → `@yao-pkg/pkg`, arm64 + x64),
-   - publishes `@zeldrisho/iconsur` to npm (`--access public`; first publish must be public — scoped packages default to private),
-   - creates a GitHub release with `dist/iconsur-arm64` / `dist/iconsur-x64` attached.
+   - builds the binaries (`vp pack` → `@yao-pkg/pkg`, macOS/Linux/Windows × arm64 + x64),
+   - publishes `@zeldrisho/iconsur` to npm (`--access public`),
+   - creates a GitHub release with the six `dist/iconsur-*` binaries attached.
+
+A push with only docs/chore/refactor commits skips the release (the workflow compares `git-cliff --bumped-version` against the latest tag).
 
 Escalation: pause and investigate (do not manually patch) if npm, GitHub, tags, manifests, or changelogs disagree; if auth/OIDC/provenance fails; or if any step would rewrite a merged, tagged, or published commit.
 
@@ -42,4 +46,5 @@ Escalation: pause and investigate (do not manually patch) if npm, GitHub, tags, 
 
 - npm `latest` is `1.7.0` (May 2022, upstream); the fork publishes under the scoped `@zeldrisho/iconsur` name.
 - Homebrew formula is deprecated (upstream archived) and disabled 2027-02-01; no fork tap is maintained — see `docs/plan.md`.
-- Binary targets are `node22-macos-arm64` and `node22-macos-x64`; other platforms are not built.
+- Binaries target Node 24 (LTS) for macOS, Linux, and Windows × arm64 + x64. Linux/Windows builds support the icon-generation pipeline only — `set`/`unset`/`cache` need macOS system services.
+- Conventional commit messages are expected (git-cliff versioning) but not enforced by a hook; non-conventional commits are skipped by git-cliff with a warning.
