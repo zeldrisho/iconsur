@@ -2,9 +2,9 @@
   
 # IconSur: macOS Big Sur Adaptive Icon Generator
 
-<a href="https://www.npmjs.com/package/iconsur"><img title="npm version" src="https://badgen.net/npm/v/iconsur" ></a>
-<a href="https://www.npmjs.com/package/iconsur"><img title="npm downloads" src="https://badgen.net/npm/dt/iconsur" ></a>
-<a href="https://github.com/rikumi/iconsur/commit"><img title="github commits" src="https://badgen.net/github/last-commit/rikumi/iconsur" ></a>
+<a href="https://www.npmjs.com/package/@zeldrisho/iconsur"><img title="npm version" src="https://badgen.net/npm/v/@zeldrisho/iconsur" ></a>
+<a href="https://www.npmjs.com/package/@zeldrisho/iconsur"><img title="npm downloads" src="https://badgen.net/npm/dt/@zeldrisho/iconsur" ></a>
+<a href="https://github.com/zeldrisho/iconsur/commit"><img title="github commits" src="https://badgen.net/github/last-commit/zeldrisho/iconsur" ></a>
 
 </p>
 
@@ -16,21 +16,18 @@ The generation is based on the most related iOS app from the App Store, or, if t
 
 ![image](https://user-images.githubusercontent.com/5051300/85926574-ebfb9d80-b8d2-11ea-836b-28e38d1f3447.png)
 
+> **Fork**: a continuation of the archived [rikumi/iconsur](https://github.com/rikumi/iconsur) (last upstream release `1.7.0`, Apr 2022). This fork publishes as `@zeldrisho/iconsur`.
+
 ## Installation
 Install it easily:
 
-### Using homebrew
-``` shell
-brew install iconsur
-```
-
 ### Using npm
 ``` shell
-npm install -g iconsur
+npm install -g @zeldrisho/iconsur
 ```
 ## Usage
 
-Download the `iconsur` binary for macOS x64 from [Releases](https://github.com/rikumi/iconsur/releases), `chmod +x` and include it in your PATH.
+Download the `iconsur` binary for macOS x64 from [Releases](https://github.com/zeldrisho/iconsur/releases), `chmod +x` and include it in your PATH.
 
 Start generating your first adaptive app icon:
 
@@ -85,7 +82,7 @@ sudo iconsur cache
 
 ## Example
 
-See [my personal iconsur setup](https://gist.github.com/rikumi/e2ac39882a7dcd29642f29343da5a54a) as an example.
+See the original author's [personal iconsur setup](https://gist.github.com/rikumi/e2ac39882a7dcd29642f29343da5a54a) as an example.
 
 ## Credits
 
