@@ -41,22 +41,25 @@ jobs:
           set -euo pipefail
           LAST_TAG="$(git describe --tags --abbrev=0 2>/dev/null || echo v0.0.0)"
           NEXT_VERSION="$(vp exec git-cliff --config cliff.toml --bumped-version 2>/dev/null | tail -n 1)"
+          # Versions are stored without the "v" prefix; tags are built as "v${VERSION}".
+          LAST_TAG="${LAST_TAG#v}"
+          NEXT_VERSION="${NEXT_VERSION#v}"
           RELEASE_VERSION=""
           RESUME="false"
           if [ -n "$NEXT_VERSION" ] && [ "$NEXT_VERSION" != "$LAST_TAG" ]; then
             # Fresh or resumed release for the computed version.
             RELEASE_VERSION="$NEXT_VERSION"
-            if git rev-parse -q --verify "refs/tags/v${NEXT_VERSION}" >/dev/null 2>&1; then
+            if git rev-parse -q --verify "refs/tags/v${RELEASE_VERSION}" >/dev/null 2>&1; then
               # Tag exists -> a prior run failed after the tag push; resume it.
               RESUME="true"
             fi
-          elif [ "$LAST_TAG" != "v0.0.0" ]; then
+          elif [ "$LAST_TAG" != "0.0.0" ]; then
             # No new commits: the latest tag may still be an incomplete
             # release (e.g. a previous run failed after pushing it).
             NPM_PUBLISHED="false"
             GH_RELEASED="false"
-            npm view "@zeldrisho/iconsur@${LAST_TAG#v}" version >/dev/null 2>&1 && NPM_PUBLISHED="true"
-            gh release view "$LAST_TAG" >/dev/null 2>&1 && GH_RELEASED="true"
+            npm view "@zeldrisho/iconsur@${LAST_TAG}" version >/dev/null 2>&1 && NPM_PUBLISHED="true"
+            gh release view "v${LAST_TAG}" >/dev/null 2>&1 && GH_RELEASED="true"
             if [ "$NPM_PUBLISHED" != "true" ] || [ "$GH_RELEASED" != "true" ]; then
               RELEASE_VERSION="$LAST_TAG"
               RESUME="true"
@@ -69,7 +72,7 @@ jobs:
       - name: Skip when there is nothing to release
         if: steps.versions.outputs.release_version == ''
         run: |
-          echo "No releasable commits since $LAST_TAG and the latest version is already published; skipping release."
+          echo "No releasable commits since v${LAST_TAG} and the latest version is already published; skipping release."
         env:
           LAST_TAG: ${{ steps.versions.outputs.last_tag }}
       - name: Update version and changelog
@@ -102,7 +105,7 @@ jobs:
         # detects the GitHub Actions OIDC environment automatically.
         run: |
           set -euo pipefail
-          if npm view "@zeldrisho/iconsur@${RELEASE_VERSION#v}" version >/dev/null 2>&1; then
+          if npm view "@zeldrisho/iconsur@${RELEASE_VERSION}" version >/dev/null 2>&1; then
             echo "v${RELEASE_VERSION} is already published to npm; skipping."
           else
             npm publish --access public

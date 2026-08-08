@@ -6,10 +6,12 @@ import { buildProgram } from "../src/cli.ts";
 import { Jimp } from "../src/jimp.ts";
 import { resolveIdentity } from "../src/icon.ts";
 
+/** Creates a fresh temp directory for one test. */
 function tempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "iconsur-test-"));
 }
 
+/** Creates an empty .app bundle skeleton (Contents/ dir) inside `dir`. */
 function makeAppDir(dir: string, name: string): string {
   const appDir = path.join(dir, `${name}.app`);
   fs.mkdirSync(path.join(appDir, "Contents"), { recursive: true });

@@ -30,8 +30,11 @@ export interface AppIdentity {
   iconPath: string;
 }
 
+/** Final canvas edge length in pixels. */
 const IMAGE_SIZE = 1024;
+/** Margin between the canvas edge and the icon box. */
 const ICON_PADDING = 100;
+/** Edge length of the centered icon box (canvas minus padding). */
 const ICON_SIZE = IMAGE_SIZE - 2 * ICON_PADDING;
 
 /** Builds a random temp path with the given prefix. */
