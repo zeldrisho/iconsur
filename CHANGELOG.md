@@ -3,6 +3,14 @@
 All notable changes to this project are documented in this file.
 
 
+## [2.0.1](https://github.com/zeldrisho/iconsur/releases/tag/v2.0.1) - 2026-08-08
+
+### Bug Fixes
+
+- Hand release PR to a human instead of auto-merging (`release`)
+- Run the npm bin from the prebuilt bundle (`packaging`)
+- Address review findings on the release workflow (`release`)
+
 ## [2.0.0](https://github.com/zeldrisho/iconsur/releases/tag/v2.0.0) - 2026-08-08
 
 ### Bug Fixes
