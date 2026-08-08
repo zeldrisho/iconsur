@@ -116,9 +116,6 @@ jobs:
           # main through the "Open release PR and wait for CI" step below,
           # because the Protect ruleset requires changes to go via a PR.
           git push origin "refs/tags/v${RELEASE_VERSION}"
-      - name: Build binaries (macOS arm64 + x64)
-        if: steps.versions.outputs.release_version != ''
-        run: vp run build
       - name: Open release PR and wait for CI
         id: release-pr
         # The Protect ruleset on main forbids direct pushes, so the release
@@ -196,6 +193,15 @@ jobs:
           else
             vp exec pnpm publish --access public --no-git-checks
           fi
+      - name: Build binaries (macOS arm64 + x64)
+        # Runs after publish: the pnpm pack triggered by publish runs the
+        # prepack script (`vp pack --no-clean` + mask.png) to rebuild
+        # dist/index.cjs for the npm tarball, so this build must come later
+        # to keep the pkg binaries out of the tarball and fresh for the
+        # GitHub release below. Gated on on_main like publish and the GitHub
+        # release: only the follow-up run (release commit on main) needs it.
+        if: steps.release-pr.outputs.on_main == 'true'
+        run: vp run build
       - name: Create GitHub release
         if: steps.release-pr.outputs.on_main == 'true'
         env:

@@ -27,7 +27,7 @@ node src/index.ts --help
 node src/index.ts set /Applications/SomeApp.app -l -o out.png   # dry-run: write PNG to a file
 ```
 
-Use `-o/--output` during development to exercise the icon pipeline without touching a real app bundle or requiring `sudo`. The `bin` field points at `src/index.ts`; npm consumers need Node `>=22.18` (type stripping is on by default).
+Use `-o/--output` during development to exercise the icon pipeline without touching a real app bundle or requiring `sudo`. The `bin` field points at the prebuilt `dist/index.cjs` bundle (rebuilt by the `prepack` script on `npm pack`/`pnpm publish`); running from source needs Node `>=22.18` (type stripping is on by default).
 
 ## Vite+ (vp) usage
 
@@ -48,6 +48,8 @@ vp run build    # runs the `build` script
 ```
 
 Pipeline: `vp pack` (tsdown single-CJS bundle, all deps inlined — pkg cannot load external ESM like `plist@5`) → copy `src/mask.png` into `dist/` → `@yao-pkg/pkg` with `.pkgrc.json` assets. Targets are `node24` for macOS arm64 + x64 (`dist/iconsur-arm64`, `dist/iconsur-x64`; gitignored) and are what CI attaches to GitHub Releases.
+
+The npm package's `iconsur` bin is the prebuilt `dist/index.cjs` (rebuilt by the `prepack` script on `npm pack`/`pnpm publish`), not `src/index.ts` — Node refuses to strip types from `.ts` files under `node_modules`.
 
 ## Project layout
 

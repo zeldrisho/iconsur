@@ -54,4 +54,3 @@ Escalation: pause and investigate (do not manually patch) if npm, GitHub, tags, 
 
 - [git-cliff documentation](https://git-cliff.org/docs/) — changelog generation, `cliff.toml` configuration (commit parsers, bump rules), and the git-cliff CLI. Note: the docs live on `git-cliff.org`; `git-cliff.com` does not resolve.
 - [git-cliff GitHub repository](https://github.com/orhun/git-cliff)
-
