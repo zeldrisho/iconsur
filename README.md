@@ -28,7 +28,7 @@ Install it easily:
 npm install -g @zeldrisho/iconsur
 ```
 
-Requires Node.js `>=22.18` (the CLI runs as TypeScript source via Node's built-in type stripping).
+Requires Node.js `>=22.18` (the published npm package ships a prebuilt bundle; running the CLI straight from source uses Node's built-in type stripping).
 
 ## Usage
 

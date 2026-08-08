@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // iconsur entry point. Runs directly under Node >=22.18 via type stripping
-// (node src/index.ts), or as the bundled CJS entry for the standalone binary.
+// (node src/index.ts), or as the bundled CJS entry for the npm bin
+// (dist/index.cjs) and the standalone binary.
 import fs from "node:fs";
 import { resolvePackageJson } from "./assets.ts";
 import { buildProgram } from "./cli.ts";

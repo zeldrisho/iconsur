@@ -6,7 +6,7 @@ on:
 permissions:
   contents: write
   id-token: write # Required for npm Trusted Publishing (OIDC)
-  pull-requests: write # Required for gh pr create/merge in the release-commit step
+  pull-requests: write # Required for gh pr create in the release-PR step
 
 # No NPM_AUTH_TOKEN secret is needed: the publish step below authenticates
 # via the trusted publisher configured for @zeldrisho/iconsur on npmjs.com.
@@ -113,18 +113,19 @@ jobs:
             fi
           fi
           # Only the tag is pushed here. The release commit itself lands on
-          # main through the "Merge release commit to main" step below,
+          # main through the "Open release PR and wait for CI" step below,
           # because the Protect ruleset requires changes to go via a PR.
           git push origin "refs/tags/v${RELEASE_VERSION}"
-      - name: Build binaries (macOS arm64 + x64)
-        if: steps.versions.outputs.release_version != ''
-        run: vp run build
-      - name: Merge release commit to main
+      - name: Open release PR and wait for CI
+        id: release-pr
         # The Protect ruleset on main forbids direct pushes, so the release
-        # commit (package.json + CHANGELOG.md) is merged through a PR that
-        # this step opens, waits for CI on, and merges. This runs before
-        # publishing so npm and the GitHub release are only exposed once main
-        # actually contains the version/changelog commit.
+        # commit (package.json + CHANGELOG.md) lands on main through a PR
+        # that this step opens and waits for CI on. The bot then hands off to
+        # a human: the release commit is never auto-merged by this workflow.
+        # Publishing (npm + GitHub release) is gated on on_main=true, so
+        # external state is only exposed once main actually contains the
+        # version/changelog commit — i.e. on the follow-up run triggered by
+        # the human merge of the release PR.
         if: steps.versions.outputs.release_version != ''
         env:
           RELEASE_VERSION: ${{ steps.versions.outputs.release_version }}
@@ -133,15 +134,29 @@ jobs:
           set -euo pipefail
           if git merge-base --is-ancestor HEAD origin/main 2>/dev/null; then
             echo "Release commit is already on main; no PR needed."
+            # The tag must point at exactly this tree: an ancestor is not
+            # enough, because main may have gained content since the tag was
+            # created (interrupted release, later merge), and the follow-up
+            # run would then build/publish HEAD while the tag stays on the
+            # older commit.
+            TAG_COMMIT="$(git rev-parse "refs/tags/v${RELEASE_VERSION}^{commit}")"
+            if [ "$(git rev-parse "${TAG_COMMIT}^{tree}")" != "$(git rev-parse "HEAD^{tree}")" ]; then
+              echo "::error::Release tree differs from tag v${RELEASE_VERSION}; re-tag the release commit and re-run the workflow."
+              exit 1
+            fi
+            echo "on_main=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           BRANCH="release/v${RELEASE_VERSION}"
           # Force-push: an interrupted prior run may have left this branch
           # (and an attached PR) behind with an equivalent but different SHA.
           git push --force origin "HEAD:refs/heads/${BRANCH}"
+          # printf (not a literal \n in double quotes) so the release message
+          # and merge instructions render as separate paragraphs.
+          PR_BODY="$(printf 'Automated release commit: bump package.json to v%s and regenerate CHANGELOG.md.\n\nThis PR is not auto-merged. Merge it with **Create a merge commit** (not squash/rebase) so the release tag keeps pointing at the commit on main; the follow-up run publishes to npm and creates the GitHub release.' "$RELEASE_VERSION")"
           PR_URL="$(gh pr create --base main --head "${BRANCH}" \
             --title "chore(release): v${RELEASE_VERSION}" \
-            --body "Automated release commit: bump package.json to v${RELEASE_VERSION} and regenerate CHANGELOG.md." \
+            --body "$PR_BODY" \
             2>/dev/null | tail -n 1 || true)"
           if [ -z "$PR_URL" ]; then
             PR_URL="$(gh pr view "${BRANCH}" --json url --jq .url 2>/dev/null || true)"
@@ -152,18 +167,20 @@ jobs:
             echo "::error::Could not create or find release PR ${BRANCH}; the release commit will not reach main. Fix the branch/PR and re-run the workflow."
             exit 1
           fi
-          # Auto-merge is disabled on this repo, so wait for the required CI
-          # check to pass and merge explicitly.
+          # Wait for the required CI check, then hand the PR to a human to
+          # merge — the release commit is never auto-merged by this workflow.
           for i in $(seq 1 60); do
             STATE="$(gh pr view "$PR_URL" --json statusCheckRollup --jq \
               '[.statusCheckRollup[]? | select(.name == "Check, test, and build") | .conclusion] | .[0] // "PENDING"' 2>/dev/null || true)"
             case "$STATE" in
               SUCCESS)
-                gh pr merge "$PR_URL" --merge --delete-branch
+                echo "::notice::Release PR is ready for a human to merge: ${PR_URL}"
+                echo "Merge it with 'Create a merge commit' (not squash/rebase) so the release commit stays tagged; the follow-up run will publish to npm and create the GitHub release."
+                echo "on_main=false" >> "$GITHUB_OUTPUT"
                 exit 0
                 ;;
-              FAILURE|ERROR|CANCELLED)
-                echo "::error::CI check on release PR failed: ${STATE}"
+              FAILURE|ERROR|CANCELLED|NEUTRAL|STALE|SKIPPED|STARTUP_FAILURE|TIMED_OUT|ACTION_REQUIRED)
+                echo "::error::CI check on release PR concluded with ${STATE}"
                 exit 1
                 ;;
             esac
@@ -172,7 +189,9 @@ jobs:
           echo "::error::Timed out waiting for CI on the release PR"
           exit 1
       - name: Publish to npm (trusted publishing / OIDC)
-        if: steps.versions.outputs.release_version != ''
+        # Only publish once the release commit is actually on main, i.e. in
+        # the run triggered by the human merge of the release PR.
+        if: steps.release-pr.outputs.on_main == 'true'
         env:
           RELEASE_VERSION: ${{ steps.versions.outputs.release_version }}
         # No NODE_AUTH_TOKEN here: setting it would make the package manager
@@ -187,8 +206,17 @@ jobs:
           else
             vp exec pnpm publish --access public --no-git-checks
           fi
+      - name: Build binaries (macOS arm64 + x64)
+        # Runs after publish: the pnpm pack triggered by publish runs the
+        # prepack script (`vp pack --no-clean` + mask.png) to rebuild
+        # dist/index.cjs for the npm tarball, so this build must come later
+        # to keep the pkg binaries out of the tarball and fresh for the
+        # GitHub release below. Gated on on_main like publish and the GitHub
+        # release: only the follow-up run (release commit on main) needs it.
+        if: steps.release-pr.outputs.on_main == 'true'
+        run: vp run build
       - name: Create GitHub release
-        if: steps.versions.outputs.release_version != ''
+        if: steps.release-pr.outputs.on_main == 'true'
         env:
           RELEASE_VERSION: ${{ steps.versions.outputs.release_version }}
           GH_TOKEN: ${{ github.token }}
@@ -197,6 +225,22 @@ jobs:
           if gh release view "v${RELEASE_VERSION}" >/dev/null 2>&1; then
             echo "GitHub release v${RELEASE_VERSION} already exists; skipping."
           else
+            # Notes cover only this release: anchor on the exact
+            # "## [${RELEASE_VERSION}]" heading (git-cliff writes the version
+            # without the "v" prefix) and stop at the next "## [" section.
+            # Fail closed when the section is missing instead of copying the
+            # whole changelog.
+            NOTES="$(
+              awk -v heading="## [${RELEASE_VERSION}]" '
+                index($0, heading) == 1 { in_release = 1 }
+                in_release && /^## \[/ && index($0, heading) != 1 { exit }
+                in_release { print }
+              ' CHANGELOG.md
+            )"
+            if [ -z "$NOTES" ]; then
+              echo "::error::No changelog section found for ${RELEASE_VERSION}"
+              exit 1
+            fi
             gh release create "v${RELEASE_VERSION}" dist/iconsur-arm64 dist/iconsur-x64 \
-              --notes-file CHANGELOG.md
+              --notes "$NOTES"
           fi
