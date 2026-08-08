@@ -8,7 +8,7 @@
 
 - `cache` runs with **no elevation, ever** on the default path: it `find`s `/private/var/folders/` for per-user icon caches (user-owned) and deletes them with `rm -rf`, then `killall`s `Dock`/`Finder`. All paths are hardcoded constants — never derived from user input.
 - `cache --system` (explicit opt-in flag) additionally removes `/Library/Caches/com.apple.iconservices.store` via `sudo`. In non-interactive sessions (scripts/CI) it probes `sudo -n` first and skips with a note — a sudo prompt must never hang automation.
-- `set`/`unset` probe the target with `fs.access(W_OK)` before mutating. Writable targets (user-owned apps, `~/Applications`) are handled unprivileged; on permission failure the **same operation is retried under `sudo`** with an explanatory message. There is no code path that elevates without first failing the unprivileged attempt.
+- `set`/`unset` run through `runWithEscalation`: the target is probed with `isWritable()` (`fs.access(W_OK)`) **before any mutation**. When the writability preflight fails, the operation is invoked directly as `op({ sudo: true })` with an explanatory message — the unprivileged mutation never runs, and there is no retry-after-failure path.
 - The `osascript`/`xattr`/`rm` invocations behind `fileicon` use constant programs and argv arrays. Paths are passed as argv to `osascript` (after `--`), never shell- or script-interpolated.
 
 ## Input handling

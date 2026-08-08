@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { parse } from "plist";
 
+/** Builds a random temp path with the given prefix. */
 function tempPath(prefix: string): string {
   return path.resolve(os.tmpdir(), `${prefix}-${Math.random().toString(36).slice(2, 8)}`);
 }

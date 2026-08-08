@@ -30,6 +30,7 @@ export const PER_USER_CACHE_FIND = [
 /** System-wide IconServices store; only removed via `cache --system`. */
 export const SYSTEM_ICON_SERVICES_STORE = "/Library/Caches/com.apple.iconservices.store";
 
+/** Runs a command with constant argv; a failed step is non-fatal. */
 function run(args: string[]): void {
   try {
     spawnSync(args[0], args.slice(1), { stdio: "ignore" });

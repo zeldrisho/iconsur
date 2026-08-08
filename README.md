@@ -2,9 +2,9 @@
 
 # IconSur: macOS Big Sur Adaptive Icon Generator
 
-<a href="https://www.npmjs.com/package/@zeldrisho/iconsur"><img title="npm version" src="https://badgen.net/npm/v/@zeldrisho/iconsur" ></a>
-<a href="https://www.npmjs.com/package/@zeldrisho/iconsur"><img title="npm downloads" src="https://badgen.net/npm/dt/@zeldrisho/iconsur" ></a>
-<a href="https://github.com/zeldrisho/iconsur/commit"><img title="github commits" src="https://badgen.net/github/last-commit/zeldrisho/iconsur" ></a>
+<a href="https://www.npmjs.com/package/@zeldrisho/iconsur"><img alt="npm version" title="npm version" src="https://badgen.net/npm/v/@zeldrisho/iconsur" ></a>
+<a href="https://www.npmjs.com/package/@zeldrisho/iconsur"><img alt="npm downloads" title="npm downloads" src="https://badgen.net/npm/dt/@zeldrisho/iconsur" ></a>
+<a href="https://github.com/zeldrisho/iconsur/commit"><img alt="GitHub last commit" title="github commits" src="https://badgen.net/github/last-commit/zeldrisho/iconsur" ></a>
 
 </p>
 

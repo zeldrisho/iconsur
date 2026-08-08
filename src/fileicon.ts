@@ -43,6 +43,7 @@ export const SET_ICON_SCRIPT = [
   "",
 ].join("\n");
 
+/** Options for native fileicon operations (sudo escalation for non-writable targets). */
 export interface FileiconOptions {
   /** Run the operation under sudo (escalation for non-writable bundles). */
   sudo?: boolean;
@@ -61,6 +62,7 @@ const CUSTOM_ICON_FLAG = 0x04;
 /** Lowercase 'icns' magic found inside an icon-bearing resource fork. */
 const ICNS_RESOURCE_MAGIC = "icns";
 
+/** Runs a constant-argv command, optionally under sudo. */
 function run(
   args: string[],
   opts: FileiconOptions = {},
@@ -155,6 +157,7 @@ function hasIconData(target: string, _opts: FileiconOptions = {}): boolean {
   }
 }
 
+/** Snapshot of the target's custom-icon flag and payload presence. */
 function customIconState(
   target: string,
   opts: FileiconOptions = {},
@@ -204,7 +207,9 @@ export function setCustomIcon(
 
 /**
  * Removes a custom icon from a file or folder (.app bundle), mirroring
- * upstream v0.3.5's removeCustomIcon.
+ * upstream v0.3.5's removeCustomIcon. Throws when xattr or rm fails, so
+ * permission, authentication, and I/O failures surface to the caller
+ * instead of being reported as success.
  */
 export function removeCustomIcon(destPath: string, opts: FileiconOptions = {}): void {
   const stat = fs.statSync(destPath, { throwIfNoEntry: false });
@@ -213,22 +218,47 @@ export function removeCustomIcon(destPath: string, opts: FileiconOptions = {}): 
   }
 
   // Step 1: clear the custom-icon flag in com.apple.FinderInfo.
+  // An already-absent attribute (readXattr -> null) counts as success.
   const hex = readXattr(destPath, FINDER_INFO_ATTRIB, opts);
   if (hex !== null) {
     const patched = clearCustomIconFlag(hex);
     if (patched === null) {
       // All bytes cleared -> drop the attribute entirely.
-      run(["xattr", "-d", FINDER_INFO_ATTRIB, destPath], opts);
+      const res = run(["xattr", "-d", FINDER_INFO_ATTRIB, destPath], opts);
+      if (res.status !== 0) {
+        throw new Error(
+          `Failed to remove '${FINDER_INFO_ATTRIB}' from ${destPath} ` +
+            `(xattr exited with status ${res.status}: ${res.stderr.trim() || "unknown error"})`,
+        );
+      }
     } else if (patched !== hex) {
-      run(["xattr", "-wx", FINDER_INFO_ATTRIB, patched, destPath], opts);
+      const res = run(["xattr", "-wx", FINDER_INFO_ATTRIB, patched, destPath], opts);
+      if (res.status !== 0) {
+        throw new Error(
+          `Failed to clear the custom-icon flag in '${FINDER_INFO_ATTRIB}' of ${destPath} ` +
+            `(xattr exited with status ${res.status}: ${res.stderr.trim() || "unknown error"})`,
+        );
+      }
     }
   }
 
   // Step 2: remove the icon payload — the `Icon\r` helper file for folders,
   // or the resource fork for plain files.
   if (stat.isDirectory()) {
-    run(["rm", "-f", path.join(destPath, FOLDER_CUSTOM_ICON)], opts);
+    const res = run(["rm", "-f", path.join(destPath, FOLDER_CUSTOM_ICON)], opts);
+    if (res.status !== 0) {
+      throw new Error(
+        `Failed to remove '${FOLDER_CUSTOM_ICON}' from ${destPath} ` +
+          `(rm exited with status ${res.status}: ${res.stderr.trim() || "unknown error"})`,
+      );
+    }
   } else if (hasIconData(destPath, opts)) {
-    run(["xattr", "-d", RESOURCE_FORK_ATTRIB, destPath], opts);
+    const res = run(["xattr", "-d", RESOURCE_FORK_ATTRIB, destPath], opts);
+    if (res.status !== 0) {
+      throw new Error(
+        `Failed to remove '${RESOURCE_FORK_ATTRIB}' from ${destPath} ` +
+          `(xattr exited with status ${res.status}: ${res.stderr.trim() || "unknown error"})`,
+      );
+    }
   }
 }

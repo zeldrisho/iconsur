@@ -11,6 +11,7 @@ import { runWithEscalation, setCustomIcon } from "./fileicon.ts";
 import { Jimp, type JimpInstance } from "./jimp.ts";
 import { readInfoPlist } from "./plist.ts";
 
+/** Options controlling the `set` icon-generation pipeline. */
 export interface IconOptions {
   local: boolean;
   keyword?: string;
@@ -23,6 +24,7 @@ export interface IconOptions {
   yes?: boolean;
 }
 
+/** Resolved app display name and source icon path. */
 export interface AppIdentity {
   name: string;
   iconPath: string;
@@ -32,6 +34,7 @@ const IMAGE_SIZE = 1024;
 const ICON_PADDING = 100;
 const ICON_SIZE = IMAGE_SIZE - 2 * ICON_PADDING;
 
+/** Builds a random temp path with the given prefix. */
 function tempPath(prefix: string): string {
   return path.resolve(os.tmpdir(), `${prefix}-${Math.random().toString(36).slice(2, 8)}`);
 }
@@ -202,29 +205,42 @@ export async function processApp(appDir: string, opts: IconOptions): Promise<voi
   applyMask(image, mask);
 
   if (opts.output) {
-    const outputPath = String(opts.output).replace(/(\..*)?$/, ".png");
+    // Replace only the basename extension so dotted parent directories
+    // (e.g. build.1/icon) are preserved in the derived .png path.
+    const parsed = path.parse(String(opts.output));
+    const outputPath = path.join(parsed.dir, `${parsed.name}.png`);
     await image.write(outputPath as `${string}.${string}`);
     console.log(`Successfully saved icon for ${appDir} at ${outputPath}\n`);
   } else {
     const tmpFile = tempPath("tmp-icon");
     const pngPath = `${tmpFile}.png`;
     await image.write(pngPath as `${string}.${string}`);
-    await applyWithPreview(resolved, pngPath, opts.yes ?? false);
-    console.log(`Successfully set icon for ${appDir}\n`);
+    const applied = await applyWithPreview(resolved, pngPath, opts.yes ?? false);
+    if (applied) {
+      fs.rmSync(pngPath, { force: true });
+      console.log(`Successfully set icon for ${appDir}\n`);
+    }
   }
 }
 
 /**
- * Applies the generated preview to the app. In an interactive terminal the
- * preview path is shown and the user is asked to confirm; non-interactive
- * runs (scripts, CI) apply directly. `yes` forces apply without prompting.
+ * Applies the generated preview to the app and returns whether the icon was
+ * applied. In an interactive terminal the preview path is shown and the user
+ * is asked to confirm; non-interactive runs (scripts, CI) apply directly.
+ * `yes` forces apply without prompting. Returns false when the user declines,
+ * in which case the caller keeps the preview file on disk.
  */
-async function applyWithPreview(appDir: string, previewPath: string, yes: boolean): Promise<void> {
-  const apply = (): void =>
+async function applyWithPreview(
+  appDir: string,
+  previewPath: string,
+  yes: boolean,
+): Promise<boolean> {
+  const apply = (): boolean => {
     runWithEscalation(appDir, (o) => setCustomIcon(appDir, previewPath, o), "Setting icon for");
+    return true;
+  };
   if (yes || !process.stdin.isTTY) {
-    apply();
-    return;
+    return apply();
   }
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
@@ -236,9 +252,9 @@ async function applyWithPreview(appDir: string, previewPath: string, yes: boolea
       console.log(
         `Re-run the same command to apply it, or revert an applied icon with: iconsur unset ${appDir}`,
       );
-      return;
+      return false;
     }
-    apply();
+    return apply();
   } finally {
     rl.close();
   }

@@ -4,10 +4,25 @@ import { createJimp } from "@jimp/core";
 import { defaultFormats, defaultPlugins } from "jimp";
 import openjpeg from "./openjpeg.ts";
 
+/** Decoded image dimensions plus raw interleaved RGBA pixel data. */
 export interface DecodedImage {
   width: number;
   height: number;
   data: Buffer;
+}
+
+/**
+ * Re-strides OpenJPEG's planar RGBA output (all R bytes, then all G, then
+ * all B, then all A) into the interleaved RGBA quads jimp expects. Each
+ * output byte `i` reads plane `i % 4` at pixel `floor(i / 4)`.
+ */
+export function planarToInterleaved(data: Buffer): Buffer {
+  const rgba = Buffer.alloc(data.length);
+  const planeSize = data.length / 4;
+  for (let i = 0; i < data.length; i++) {
+    rgba[i] = data[planeSize * (i % 4) + Math.floor(i / 4)] || 0;
+  }
+  return rgba;
 }
 
 /**
@@ -16,15 +31,10 @@ export interface DecodedImage {
  */
 export function decodeJp2(buffer: Buffer): DecodedImage {
   const { width, height, data } = openjpeg(buffer, "jp2");
-  // Planar RGB -> Pixel RGB: each byte stream (all R, then all G, then all B,
-  // then all A) is re-strided into RGBA quads.
-  const rgba = Buffer.alloc(data.length);
-  for (let i = 0; i < data.length; i++) {
-    rgba[i] = data[(data.length / 4) * (i % 4) + Math.round(i / 4)] || 0;
-  }
-  return { width, height, data: rgba };
+  return { width, height, data: planarToInterleaved(data) };
 }
 
+/** Decode-only JP2 format plugin; JPEG 2000 encoding is out of scope. */
 const jp2Format = () => ({
   mime: "image/jp2",
   hasAlpha: true,
@@ -41,4 +51,5 @@ export const Jimp = createJimp({
   formats: [...defaultFormats, jp2Format],
 });
 
+/** Instance type of the configured Jimp class. */
 export type JimpInstance = InstanceType<typeof Jimp>;

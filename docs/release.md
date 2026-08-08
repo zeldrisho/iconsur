@@ -40,7 +40,7 @@ Escalation: pause and investigate (do not manually patch) if npm, GitHub, tags, 
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every PR and push to `main`: `pnpm install --frozen-lockfile`, `vp check`, `vp test`, `pnpm run build`. macOS-specific verification (`set`/`cache`) stays manual/on-device — CI is `ubuntu-latest`.
+`.github/workflows/ci.yml` runs on every PR and push to `main`: `voidzero-dev/setup-vp` installs dependencies (`run-install: true`), then `vp check`, `vp test`, and `vp run build`. macOS-specific verification (`set`/`cache`) stays manual/on-device — CI is `ubuntu-latest`.
 
 ## Known issues
 

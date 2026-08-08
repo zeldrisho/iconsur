@@ -4,7 +4,7 @@ Registry for code/config changes deferred from docs-only sessions. Each entry re
 
 Legend: `[ ]` planned · `[~]` in progress · `[x]` done
 
-Status (2026-08): **implemented** — full TypeScript 7 migration landed (zero `.js`/`.sh` in the repo), vp-native pre-commit hook active (commitlint removed by maintainer request), sudo-free `cache`/`set` with preview-before-apply, fully automated git-cliff release pipeline (no manual release/publish except the first npm publish), six cross-platform binaries. Remaining manual steps: branch protection on `main` (item 7) and re-verify npm badge URLs after the first publish (item 1).
+Status (2026-08): **implemented** — full TypeScript 7 migration landed (zero `.js`/`.sh` in the repo), vp-native pre-commit hook active (commitlint removed by maintainer request), sudo-free `cache`/`set` with preview-before-apply, fully automated git-cliff release pipeline (no manual release/publish except the first npm publish), six cross-platform binaries. Remaining manual steps: branch protection on `main` (item 7), re-verify npm badge URLs after the first publish (item 1), and the clean-machine retest (item 8).
 
 ---
 
@@ -65,7 +65,7 @@ Research 2026-08 — versions verified against the npm registry; API claims veri
 
 ## 4. Vite+ (vp) adoption (P1)
 
-Current state: `vp v0.2.8` at `~/.vite-plus/bin/vp`; project **not** migrated (no local `vite-plus`, no `vite.config.ts`). `iconsur` runs as a vp-managed global package (`~/.vite-plus/packages/iconsur`, Node 24.19.0).
+Current state: the migration is **complete** — local `vite-plus` and `vite.config.ts` exist (see the completed checklist below); `vp` runs as a vp-managed global package (`~/.vite-plus/packages/iconsur`, Node 24.19.0).
 
 - [x] Declare `devEngines.packageManager` + `devEngines.runtime` (Node 24.19.0 pinned via `vp env pin`); `.node-version` dropped by maintainer request — CI sets Node 24 via setup-vp.
 - [x] Standardize on `vp install` / `vp add` / `vp update`; `git rm` stale `package-lock.json`, keep it in `.gitignore` (already listed).
@@ -83,7 +83,7 @@ vp-native, no husky/lint-staged. Verified against viteplus.dev/guide/commit-hook
 - [x] ~~commit-msg lint~~ **removed by maintainer decision** (2026-08): no commitlint; conventional messages remain a convention, and git-cliff skips non-conventional commits with a warning.
 - [x] `VP_GIT_HOOKS=0` documented as the opt-out (CI commits, tooling).
 
-**Acceptance:** `git commit` with an unformatted `.ts` file or a non-conventional message is blocked; staged-only enforcement (unstaged changes untouched).
+**Acceptance:** `git commit` with an unformatted staged `.ts` file is blocked and auto-fixed (`vp check --fix`); staged-only enforcement (unstaged changes untouched). Non-conventional commit messages are **not** blocked — commitlint was removed (see above); conventional messages remain the convention for git-cliff versioning. Opt out entirely with `VP_GIT_HOOKS=0`.
 
 ## 6. git-cliff changelog + releases (P1)
 
@@ -100,7 +100,7 @@ Mirror the `pi-packages` release setup (see `docs/release.md`) scaled to one pac
 - [x] Add PR status-check workflow (`ci.yml`): `pull_request` + push to `main` → `voidzero-dev/setup-vp` (Node 24, cache, install) → `vp check`, `vp test`, `vp run build`.
 - [x] `actions/checkout@v7` + `voidzero-dev/setup-vp@v1.17.0` (exact tag: setup-vp's moving `v1` is frozen at v1.15.0 per upstream docs — do not use it). Node 24 LTS via `node-version` input; `.node-version` dropped (pin lives in `package.json#devEngines.runtime`). `@yao-pkg/pkg` cross-compiles macOS targets from `ubuntu-latest`.
 - [x] macOS-specific verification (`set`/`cache` can't run on ubuntu) stays manual/on-device — item 8.
-- [ ] Enable branch protection on `main` (GitHub settings): require the status check, a PR review, and up-to-date branches; optionally enforce conventional commits via commitlint (already local, item 5).
+- [ ] Enable branch protection on `main` (GitHub settings): require the status check, a PR review, and up-to-date branches; optionally enforce conventional commits via commitlint (would need to be re-added — removed in item 5).
 
 ## 8. Sudo reduction — `cache` becomes sudo-free; `set` escalates only when required (P1)
 
@@ -130,7 +130,7 @@ Goal: **zero `sudo` by default**. Elevation happens only (a) for an optional sys
 ## 10. Upstream sync check (P3)
 
 - [x] `mklement0/fileicon` newer fixes (now v0.3.5 vs vendored v0.3.0) are **superseded**: the native `fileicon.ts` reimplementation (item 2) adopts the v0.3.5 AppleScript-ObjC mechanism directly. Track upstream only if `set`/`rm` edge cases regress.
-- [x] `src/openjpeg.js` stays as-is (or becomes WASM per item 2) unless JP2 decoding breaks.
+- [x] `src/openjpeg.ts` stays as-is (or becomes WASM per item 2) unless JP2 decoding breaks.
 
 ## 11. Repo hygiene: AGENTS.md stops referencing plan.md (P1, new)
 

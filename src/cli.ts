@@ -5,6 +5,7 @@ import { clearIconCache } from "./cache.ts";
 import { removeCustomIcon, runWithEscalation } from "./fileicon.ts";
 import { processApp } from "./icon.ts";
 
+/** CLI option values shared by the `set` command. */
 export interface CliOptions {
   local?: boolean;
   keyword?: string;
@@ -17,6 +18,7 @@ export interface CliOptions {
   yes?: boolean;
 }
 
+/** Expands a glob when it is the only argument; otherwise returns the args. */
 function expandDirs(dir: string, otherDirs: string[]): string[] {
   if (!otherDirs.length && dir.includes("*")) {
     return globSync(dir);
@@ -24,6 +26,7 @@ function expandDirs(dir: string, otherDirs: string[]): string[] {
   return [dir, ...otherDirs];
 }
 
+/** Builds the commander program with the `set`, `unset`, and `cache` commands. */
 export function buildProgram(version: string): Command {
   const program = new Command();
   program.name("iconsur").version(version);

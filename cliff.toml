@@ -43,4 +43,9 @@ commit_parsers = [
 ]
 filter_commits = false
 # Breaking changes are signalled by `!` or a BREAKING CHANGE footer.
-commit_preprocessors = [{ pattern = "\\(([^)]*)\\)?\\s*!", replace = "($1)" }]
+
+[bump]
+# docs/refactor/test/build/ci/chore commits never trigger a version bump.
+# No commit_preprocessors here: they run before Conventional Commit parsing
+# and would strip the `!` breaking-change marker (blocking major bumps).
+no_increment_regex = "docs|refactor|test|build|ci|chore"
