@@ -49,13 +49,21 @@ commit_parsers = [
   # changelog so regenerating it on a later release stays byte-identical.
   # Must precede the generic ^chore rule (first match wins).
   { message = "^chore\\(release\\):", skip = true },
+  # GitHub merge commits ("Merge pull request #N from ...") land on main
+  # for every PR merge; skip them so they can never bump the version or
+  # pollute the changelog (git-cliff would otherwise treat them as a
+  # patch-level bump). Must precede the catch-all "Other" rule.
+  { message = "^Merge pull request", skip = true },
   { message = "^chore(?:\\([^)]*\\))?!?:", group = "Chore" },
   { message = ".*", group = "Other" },
 ]
 # Breaking changes are signalled by `!` or a BREAKING CHANGE footer.
 
 [bump]
-# docs/refactor/test/build/ci/chore commits never trigger a version bump.
+# docs/refactor/test/build/ci/chore commits never trigger a version bump
+# (no_increment_regex matches conventional commit types only, so GitHub
+# merge commits cannot be excluded here - they are skipped in
+# commit_parsers above instead).
 # No commit_preprocessors here: they run before Conventional Commit parsing
 # and would strip the `!` breaking-change marker (blocking major bumps).
 no_increment_regex = "docs|refactor|test|build|ci|chore"
