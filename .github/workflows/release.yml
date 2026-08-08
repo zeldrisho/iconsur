@@ -6,6 +6,7 @@ on:
 permissions:
   contents: write
   id-token: write # Required for npm Trusted Publishing (OIDC)
+  pull-requests: write # Required for gh pr create/merge in the release-commit step
 
 # No NPM_AUTH_TOKEN secret is needed: the publish step below authenticates
 # via the trusted publisher configured for @zeldrisho/iconsur on npmjs.com.
@@ -39,20 +40,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          LAST_TAG="$(git describe --tags --abbrev=0 2>/dev/null || echo v0.0.0)"
-          NEXT_VERSION="$(vp exec git-cliff --config cliff.toml --bumped-version 2>/dev/null | tail -n 1)"
+          # Highest version tag, reachable or not: `git describe` breaks when
+          # the only tag points at a commit that is not on this branch yet
+          # (e.g. the release commit of an interrupted run).
+          LAST_TAG="$(git tag -l 'v*' --sort=-v:refname | head -n 1 || true)"
+          LAST_TAG="${LAST_TAG:-v0.0.0}"
+          # --use-branch-tags: only consider tags on this branch so an
+          # unreachable tag (interrupted release) can never skew the bump.
+          NEXT_VERSION="$(vp exec git-cliff --config cliff.toml --bumped-version --use-branch-tags 2>/dev/null | tail -n 1)"
           # Versions are stored without the "v" prefix; tags are built as "v${VERSION}".
           LAST_TAG="${LAST_TAG#v}"
           NEXT_VERSION="${NEXT_VERSION#v}"
           RELEASE_VERSION=""
-          RESUME="false"
           if [ -n "$NEXT_VERSION" ] && [ "$NEXT_VERSION" != "$LAST_TAG" ]; then
-            # Fresh or resumed release for the computed version.
+            # New conventional commits since the latest tag.
             RELEASE_VERSION="$NEXT_VERSION"
-            if git rev-parse -q --verify "refs/tags/v${RELEASE_VERSION}" >/dev/null 2>&1; then
-              # Tag exists -> a prior run failed after the tag push; resume it.
-              RESUME="true"
-            fi
           elif [ "$LAST_TAG" != "0.0.0" ]; then
             # No new commits: the latest tag may still be an incomplete
             # release (e.g. a previous run failed after pushing it).
@@ -62,13 +64,11 @@ jobs:
             gh release view "v${LAST_TAG}" >/dev/null 2>&1 && GH_RELEASED="true"
             if [ "$NPM_PUBLISHED" != "true" ] || [ "$GH_RELEASED" != "true" ]; then
               RELEASE_VERSION="$LAST_TAG"
-              RESUME="true"
             fi
           fi
           echo "last_tag=$LAST_TAG" >> "$GITHUB_OUTPUT"
           echo "next_version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
           echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
-          echo "resume=$RESUME" >> "$GITHUB_OUTPUT"
       - name: Skip when there is nothing to release
         if: steps.versions.outputs.release_version == ''
         run: |
@@ -76,7 +76,9 @@ jobs:
         env:
           LAST_TAG: ${{ steps.versions.outputs.last_tag }}
       - name: Update version and changelog
-        if: steps.versions.outputs.release_version != '' && steps.versions.outputs.resume == 'false'
+        # Runs for fresh and resumed releases alike: every action below is
+        # idempotent (skip commit if unchanged, skip tag if it exists).
+        if: steps.versions.outputs.release_version != ''
         env:
           RELEASE_VERSION: ${{ steps.versions.outputs.release_version }}
         run: |
@@ -85,8 +87,9 @@ jobs:
           # pnpm's native version command (no npm CLI delegation, so npm's
           # devEngines EBADDEVENGINES check never runs). --no-git-checks:
           # git-cliff just dirtied the working tree above; we create the
-          # commit and tag ourselves in this step.
-          vp exec pnpm version "$RELEASE_VERSION" --no-git-tag-version --no-git-checks
+          # commit and tag ourselves in this step. --allow-same-version:
+          # a resumed run may already have the bumped manifest.
+          vp exec pnpm version "$RELEASE_VERSION" --no-git-tag-version --no-git-checks --allow-same-version
           git add package.json CHANGELOG.md
           if git diff --cached --quiet; then
             echo "Version and changelog already committed by a prior run; not creating a duplicate commit."
@@ -95,11 +98,79 @@ jobs:
           fi
           if ! git rev-parse -q --verify "refs/tags/v${RELEASE_VERSION}" >/dev/null 2>&1; then
             git tag "v${RELEASE_VERSION}"
+          else
+            # Tag exists: verify it resolves to the current release commit
+            # or to a commit already on this branch (a fully merged release
+            # being resumed after a failed publish). An orphaned tag from an
+            # interrupted run must not be silently reused while a different
+            # commit gets merged to main.
+            TAG_COMMIT="$(git rev-parse "refs/tags/v${RELEASE_VERSION}^{commit}")"
+            if git merge-base --is-ancestor "$TAG_COMMIT" HEAD 2>/dev/null; then
+              echo "Tag v${RELEASE_VERSION} already exists and resolves to a commit on this branch; reusing it."
+            else
+              echo "::error::Tag v${RELEASE_VERSION} exists but points to ${TAG_COMMIT}, a commit not on this branch. This is likely an orphaned tag from an interrupted run; delete the tag (git push origin :refs/tags/v${RELEASE_VERSION}) and re-run the workflow."
+              exit 1
+            fi
           fi
-          git push origin main --tags
+          # Only the tag is pushed here. The release commit itself lands on
+          # main through the "Merge release commit to main" step below,
+          # because the Protect ruleset requires changes to go via a PR.
+          git push origin "refs/tags/v${RELEASE_VERSION}"
       - name: Build binaries (macOS arm64 + x64)
         if: steps.versions.outputs.release_version != ''
         run: vp run build
+      - name: Merge release commit to main
+        # The Protect ruleset on main forbids direct pushes, so the release
+        # commit (package.json + CHANGELOG.md) is merged through a PR that
+        # this step opens, waits for CI on, and merges. This runs before
+        # publishing so npm and the GitHub release are only exposed once main
+        # actually contains the version/changelog commit.
+        if: steps.versions.outputs.release_version != ''
+        env:
+          RELEASE_VERSION: ${{ steps.versions.outputs.release_version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if git merge-base --is-ancestor HEAD origin/main 2>/dev/null; then
+            echo "Release commit is already on main; no PR needed."
+            exit 0
+          fi
+          BRANCH="release/v${RELEASE_VERSION}"
+          # Force-push: an interrupted prior run may have left this branch
+          # (and an attached PR) behind with an equivalent but different SHA.
+          git push --force origin "HEAD:refs/heads/${BRANCH}"
+          PR_URL="$(gh pr create --base main --head "${BRANCH}" \
+            --title "chore(release): v${RELEASE_VERSION}" \
+            --body "Automated release commit: bump package.json to v${RELEASE_VERSION} and regenerate CHANGELOG.md." \
+            2>/dev/null | tail -n 1 || true)"
+          if [ -z "$PR_URL" ]; then
+            PR_URL="$(gh pr view "${BRANCH}" --json url --jq .url 2>/dev/null || true)"
+          fi
+          if [ -z "$PR_URL" ]; then
+            # Fail loudly: a later run cannot retry the missing merge, because
+            # it would see the pushed tag / published state as "complete".
+            echo "::error::Could not create or find release PR ${BRANCH}; the release commit will not reach main. Fix the branch/PR and re-run the workflow."
+            exit 1
+          fi
+          # Auto-merge is disabled on this repo, so wait for the required CI
+          # check to pass and merge explicitly.
+          for i in $(seq 1 60); do
+            STATE="$(gh pr view "$PR_URL" --json statusCheckRollup --jq \
+              '[.statusCheckRollup[]? | select(.name == "Check, test, and build") | .conclusion] | .[0] // "PENDING"' 2>/dev/null || true)"
+            case "$STATE" in
+              SUCCESS)
+                gh pr merge "$PR_URL" --merge --delete-branch
+                exit 0
+                ;;
+              FAILURE|ERROR|CANCELLED)
+                echo "::error::CI check on release PR failed: ${STATE}"
+                exit 1
+                ;;
+            esac
+            sleep 10
+          done
+          echo "::error::Timed out waiting for CI on the release PR"
+          exit 1
       - name: Publish to npm (trusted publishing / OIDC)
         if: steps.versions.outputs.release_version != ''
         env:
