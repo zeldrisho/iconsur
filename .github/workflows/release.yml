@@ -134,6 +134,16 @@ jobs:
           set -euo pipefail
           if git merge-base --is-ancestor HEAD origin/main 2>/dev/null; then
             echo "Release commit is already on main; no PR needed."
+            # The tag must point at exactly this tree: an ancestor is not
+            # enough, because main may have gained content since the tag was
+            # created (interrupted release, later merge), and the follow-up
+            # run would then build/publish HEAD while the tag stays on the
+            # older commit.
+            TAG_COMMIT="$(git rev-parse "refs/tags/v${RELEASE_VERSION}^{commit}")"
+            if [ "$(git rev-parse "${TAG_COMMIT}^{tree}")" != "$(git rev-parse "HEAD^{tree}")" ]; then
+              echo "::error::Release tree differs from tag v${RELEASE_VERSION}; re-tag the release commit and re-run the workflow."
+              exit 1
+            fi
             echo "on_main=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -141,9 +151,12 @@ jobs:
           # Force-push: an interrupted prior run may have left this branch
           # (and an attached PR) behind with an equivalent but different SHA.
           git push --force origin "HEAD:refs/heads/${BRANCH}"
+          # printf (not a literal \n in double quotes) so the release message
+          # and merge instructions render as separate paragraphs.
+          PR_BODY="$(printf 'Automated release commit: bump package.json to v%s and regenerate CHANGELOG.md.\n\nThis PR is not auto-merged. Merge it with **Create a merge commit** (not squash/rebase) so the release tag keeps pointing at the commit on main; the follow-up run publishes to npm and creates the GitHub release.' "$RELEASE_VERSION")"
           PR_URL="$(gh pr create --base main --head "${BRANCH}" \
             --title "chore(release): v${RELEASE_VERSION}" \
-            --body "Automated release commit: bump package.json to v${RELEASE_VERSION} and regenerate CHANGELOG.md.\n\nThis PR is not auto-merged. Merge it with **Create a merge commit** (not squash/rebase) so the release tag keeps pointing at the commit on main; the follow-up run publishes to npm and creates the GitHub release." \
+            --body "$PR_BODY" \
             2>/dev/null | tail -n 1 || true)"
           if [ -z "$PR_URL" ]; then
             PR_URL="$(gh pr view "${BRANCH}" --json url --jq .url 2>/dev/null || true)"
@@ -166,8 +179,8 @@ jobs:
                 echo "on_main=false" >> "$GITHUB_OUTPUT"
                 exit 0
                 ;;
-              FAILURE|ERROR|CANCELLED)
-                echo "::error::CI check on release PR failed: ${STATE}"
+              FAILURE|ERROR|CANCELLED|NEUTRAL|STALE|SKIPPED|STARTUP_FAILURE|TIMED_OUT|ACTION_REQUIRED)
+                echo "::error::CI check on release PR concluded with ${STATE}"
                 exit 1
                 ;;
             esac
@@ -212,10 +225,22 @@ jobs:
           if gh release view "v${RELEASE_VERSION}" >/dev/null 2>&1; then
             echo "GitHub release v${RELEASE_VERSION} already exists; skipping."
           else
-            # Notes cover only this release: extract from the first
-            # "## [v…]" section down to the next one (older releases and the
-            # generated-by footer follow below).
-            NOTES="$(awk '/^## \[/ { if (seen) exit; seen = 1 } { print }' CHANGELOG.md)"
+            # Notes cover only this release: anchor on the exact
+            # "## [${RELEASE_VERSION}]" heading (git-cliff writes the version
+            # without the "v" prefix) and stop at the next "## [" section.
+            # Fail closed when the section is missing instead of copying the
+            # whole changelog.
+            NOTES="$(
+              awk -v heading="## [${RELEASE_VERSION}]" '
+                index($0, heading) == 1 { in_release = 1 }
+                in_release && /^## \[/ && index($0, heading) != 1 { exit }
+                in_release { print }
+              ' CHANGELOG.md
+            )"
+            if [ -z "$NOTES" ]; then
+              echo "::error::No changelog section found for ${RELEASE_VERSION}"
+              exit 1
+            fi
             gh release create "v${RELEASE_VERSION}" dist/iconsur-arm64 dist/iconsur-x64 \
               --notes "$NOTES"
           fi
