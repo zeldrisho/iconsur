@@ -1,6 +1,6 @@
 {
   "name": "@zeldrisho/iconsur",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Generate macOS Big Sur style adaptive icons for third-party apps",
   "license": "MIT",
   "repository": {
