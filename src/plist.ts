@@ -16,6 +16,12 @@ function tempPath(prefix: string): string {
  * the directory name and `AppIcon.icns`).
  */
 export function readInfoPlist(infoPlistPath: string): Record<string, unknown> | null {
+  try {
+    return parse(fs.readFileSync(infoPlistPath, "utf8")) as Record<string, unknown>;
+  } catch {
+    // Not a (readable) XML plist -- fall through to `plutil`, which also
+    // handles binary plists.
+  }
   const convertedPlist = tempPath("tmp-plist");
   try {
     const res = spawnSync(
