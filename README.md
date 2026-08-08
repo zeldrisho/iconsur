@@ -87,15 +87,16 @@ iconsur cache
 
 ### Preview before applying
 
-When `iconsur set` generates an icon for an app (no `-o`), it shows the preview path and asks for confirmation in an interactive terminal before touching the bundle:
+When `iconsur set` generates an icon for an app (no `-o`), it shows the preview path, **auto-opens the generated preview and the app's current icon in Preview** so you can see and compare them side by side, and asks for confirmation in an interactive terminal before touching the bundle:
 
 ```sh
 $ iconsur set /Applications/Visual\ Studio\ Code.app/ -l
 Generated preview at /var/folders/.../tmp-icon-abc123.png
-Apply icon to /Applications/Visual Studio Code.app? [y/N] y
+Opening the preview and the current icon in Preview for comparison...
+Apply icon to /Applications/Visual Studio Code.app? [Y/n]
 ```
 
-Answer anything other than `y` to keep the original icon; the generated preview stays on disk. Non-interactive runs (scripts, CI) apply directly, and `-y`/`--yes` skips the prompt. `iconsur unset <app>` restores the original icon at any time.
+Pressing **Enter** applies the new icon (the prompt defaults to `Y`); type `n` to keep the original icon. The generated preview stays on disk when declined. Non-interactive runs (scripts, CI) apply directly, and `-y`/`--yes` skips the prompt. `iconsur unset <app>` restores the original icon at any time.
 
 ### Permissions (no blanket `sudo`)
 

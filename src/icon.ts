@@ -1,6 +1,7 @@
 // The `set` icon-generation pipeline: resolve the app identity, obtain a
 // source icon (App Store search or local ICNS/PNG), compose the adaptive
 // canvas, apply the mask, and write/apply the result.
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -50,6 +51,84 @@ export function applyMask(image: JimpInstance, mask: JimpInstance): void {
   image.scan(0, 0, image.width, image.height, (x, y) => {
     image.setPixelColor((mask.getPixelColor(x, y) & image.getPixelColor(x, y)) >>> 0, x, y);
   });
+}
+
+/**
+ * Returns the largest embedded image from an ICNS buffer, or null when the
+ * buffer is not a parseable ICNS (e.g. a plain PNG passed via `--input`).
+ */
+function largestIcnsImage(iconBuffer: Buffer<ArrayBuffer>): Buffer<ArrayBuffer> | null {
+  try {
+    const subIconBuffer = Object.entries(icns.parse(iconBuffer))
+      .filter(([key]) => icns.isImageType(key))
+      .map(([, value]) => value)
+      .sort((a, b) => b.length - a.length)[0];
+    return subIconBuffer ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * True when the user's answer accepts the apply prompt. The prompt defaults
+ * to apply: a plain Enter (empty answer) and `y`/`yes` (any case) accept;
+ * anything else declines.
+ */
+export function parseApplyAnswer(input: string): boolean {
+  const trimmed = input.trim();
+  return trimmed === "" || /^y(es)?$/i.test(trimmed);
+}
+
+/**
+ * Opens the given images in the default viewer (Preview on macOS) so the
+ * user can compare them side by side. Best-effort: never throws, and it is
+ * a no-op outside macOS (the tool is macOS-only anyway).
+ */
+export function openForComparison(paths: string[]): void {
+  if (process.platform !== "darwin" || paths.length === 0) {
+    return;
+  }
+  try {
+    const child = spawn("open", paths, { detached: true, stdio: "ignore" });
+    child.unref();
+  } catch {
+    // Best-effort preview: a GUI-less session must not break the CLI.
+  }
+}
+
+/**
+ * Extracts the app's current icon to a temporary PNG so it can be opened
+ * next to the generated preview. Prefers the custom icon payload stored in
+ * the `Icon\r` resource fork (set by a previous `iconsur set`), then falls
+ * back to the bundled icon (`identity.iconPath`). Returns null when no
+ * readable icon exists — callers then open the preview alone.
+ */
+export async function extractOldIcon(
+  appDir: string,
+  identity: AppIdentity,
+): Promise<string | null> {
+  let image: Buffer | null = null;
+  try {
+    const fork = fs.readFileSync(path.join(appDir, "Icon\r", "..namedfork", "rsrc"));
+    image = fork.includes(Buffer.from("icns", "ascii")) ? largestIcnsImage(fork) : null;
+  } catch {
+    // No custom-icon fork (or unsupported filesystem) — use the bundled icon.
+  }
+  if (image === null && identity.iconPath && fs.existsSync(identity.iconPath)) {
+    const data = fs.readFileSync(identity.iconPath);
+    image = largestIcnsImage(data) ?? data;
+  }
+  if (image === null) {
+    return null;
+  }
+  try {
+    const oldIcon = await Jimp.read(image);
+    const oldPath = `${tempPath("old-icon")}.png`;
+    await oldIcon.write(oldPath as `${string}.${string}`);
+    return oldPath;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -136,16 +215,9 @@ async function generateLocalIcon(identity: AppIdentity, opts: IconOptions): Prom
   }
 
   let iconBuffer = fs.readFileSync(identity.iconPath);
-  try {
-    const subIconBuffer = Object.entries(icns.parse(iconBuffer))
-      .filter(([key]) => icns.isImageType(key))
-      .map(([, value]) => value)
-      .sort((a, b) => b.length - a.length)[0];
-    if (subIconBuffer) {
-      iconBuffer = subIconBuffer;
-    }
-  } catch {
-    // Not an ICNS (e.g. a plain PNG passed via --input) — read it directly.
+  const subIconBuffer = largestIcnsImage(iconBuffer);
+  if (subIconBuffer) {
+    iconBuffer = subIconBuffer;
   }
 
   let originalIcon: JimpInstance;
@@ -218,7 +290,7 @@ export async function processApp(appDir: string, opts: IconOptions): Promise<voi
     const tmpFile = tempPath("tmp-icon");
     const pngPath = `${tmpFile}.png`;
     await image.write(pngPath as `${string}.${string}`);
-    const applied = await applyWithPreview(resolved, pngPath, opts.yes ?? false);
+    const applied = await applyWithPreview(resolved, identity, pngPath, opts.yes ?? false);
     if (applied) {
       fs.rmSync(pngPath, { force: true });
       console.log(`Successfully set icon for ${appDir}\n`);
@@ -228,13 +300,16 @@ export async function processApp(appDir: string, opts: IconOptions): Promise<voi
 
 /**
  * Applies the generated preview to the app and returns whether the icon was
- * applied. In an interactive terminal the preview path is shown and the user
- * is asked to confirm; non-interactive runs (scripts, CI) apply directly.
- * `yes` forces apply without prompting. Returns false when the user declines,
- * in which case the caller keeps the preview file on disk.
+ * applied. In an interactive terminal the generated preview and the app's
+ * current icon are auto-opened side by side for comparison and the user is
+ * asked to confirm, defaulting to apply (Enter = yes); non-interactive runs
+ * (scripts, CI) apply directly. `yes` forces apply without prompting.
+ * Returns false when the user declines, in which case the caller keeps the
+ * preview file on disk.
  */
 async function applyWithPreview(
   appDir: string,
+  identity: AppIdentity,
   previewPath: string,
   yes: boolean,
 ): Promise<boolean> {
@@ -245,12 +320,24 @@ async function applyWithPreview(
   if (yes || !process.stdin.isTTY) {
     return apply();
   }
+  // Interactive session: open the new preview next to the current icon so the
+  // user can see and compare them before deciding; the prompt defaults to
+  // apply (plain Enter accepts).
+  const oldIconPath = await extractOldIcon(appDir, identity);
+  openForComparison(oldIconPath ? [previewPath, oldIconPath] : [previewPath]);
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
+    const prompt = [
+      `Generated preview at ${previewPath}`,
+      oldIconPath
+        ? "Opening the preview and the current icon in Preview for comparison..."
+        : "Opening the preview in Preview for comparison...",
+      `Apply icon to ${appDir}? [Y/n] `,
+    ].join("\n");
     const answer = await new Promise<string>((resolve) => {
-      rl.question(`Generated preview at ${previewPath}\nApply icon to ${appDir}? [y/N] `, resolve);
+      rl.question(prompt, resolve);
     });
-    if (!/^y(es)?$/i.test(answer.trim())) {
+    if (!parseApplyAnswer(answer)) {
       console.log(`\nIcon not applied. Preview kept at ${previewPath}.`);
       console.log(
         `Re-run the same command to apply it, or revert an applied icon with: iconsur unset ${appDir}`,
