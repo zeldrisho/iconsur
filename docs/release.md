@@ -33,7 +33,7 @@ The Protect ruleset forbids direct pushes to `main`, and the workflow never auto
    - builds the binaries (`vp pack` → `@yao-pkg/pkg`, macOS arm64 + x64);
    - opens PR `release/vX.Y.Z` and waits for the `Check, test, and build` check, then stops.
 4. Merge the release PR manually with **Create a merge commit** (not squash/rebase, so the tag keeps pointing at the commit on `main`).
-5. That merge pushes to `main` and triggers the follow-up run, which resumes the release idempotently (no duplicate commit/tag), then publishes `@zeldrisho/iconsur` to npm (`--access public`) and creates a GitHub release with `dist/iconsur-arm64` / `dist/iconsur-x64` attached. GitHub release notes cover only the new version (the first `## [v…]` section of `CHANGELOG.md`), not the full history.
+5. That merge pushes to `main` and triggers the follow-up run, which resumes the release idempotently (no duplicate commit/tag), then publishes `@zeldrisho/iconsur` to npm (`--access public`) and runs `scripts/release-sync.sh`, which creates or edits the GitHub release (`gh release create`/`edit`, idempotent) with the binaries `dist/iconsur-arm64` / `dist/iconsur-x64` attached and release notes taken from git-cliff's section for exactly that tag (`git-cliff --latest --tag` — same source as `CHANGELOG.md`), then verifies the npm-published version matches the tag.
 
 A push with only docs/chore/refactor commits skips the release (the workflow compares `git-cliff --bumped-version` against the latest tag).
 
@@ -41,13 +41,14 @@ Escalation: pause and investigate (do not manually patch) if npm, GitHub, tags, 
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every PR and push to `main`: `voidzero-dev/setup-vp` installs dependencies (`run-install: true`), then `vp check`, `vp test`, and `vp run build`. macOS-specific verification (`set`/`cache`) stays manual/on-device — CI is `ubuntu-latest`.
+`.github/workflows/ci.yml` runs on every PR and push to `main`: `voidzero-dev/setup-vp` installs dependencies (`run-install: true`), then `vp check`, `vp test`, `vp run build`, and a smoke test that executes the natively-built binary (`dist/iconsur-arm64 --version` or `dist/iconsur-x64`, whichever matches the runner). CI runs on **`macos-latest`** because the only shipped artifact is the macOS binary — ubuntu CI could not execute it (a broken binary would pass the build step and only fail at runtime, e.g. the lipo/universal issue below). macOS-specific `set`/`cache` verification stays manual/on-device.
 
 ## Known issues
 
 - npm `latest` is `1.7.0` (May 2022, upstream); the fork publishes under the scoped `@zeldrisho/iconsur` name.
 - Homebrew formula is deprecated (upstream archived) and disabled 2027-02-01; no fork tap is maintained — see `docs/plan.md`.
 - Binaries target Node 24 (LTS) for macOS arm64 + x64.
+- **No universal (fat) binary**: `lipo -create` merges the two pkg binaries into a single fat Mach-O, but the resulting binary cannot start — pkg's bootstrap reads its own slice at a fixed offset, so a fat file throws `SyntaxError` at `pkg/prelude/bootstrap.js` (known upstream issue vercel/pkg#1597, unfixed; @yao-pkg/pkg 6.22.0 has no universal target). A fat binary would also roughly double download size (measured: arm64 66M + x64 68M ≈ 135M total). Per-arch binaries remain the supported distribution; revisit only if the packager changes.
 - Conventional commit messages are expected (git-cliff versioning) but not enforced by a hook; non-conventional commits are skipped by git-cliff with a warning. If this bites, reinstate `.vite-hooks/commit-msg` with `vp exec commitlint -e`.
 
 ## References

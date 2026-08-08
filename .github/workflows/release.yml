@@ -215,32 +215,12 @@ jobs:
         # release: only the follow-up run (release commit on main) needs it.
         if: steps.release-pr.outputs.on_main == 'true'
         run: vp run build
-      - name: Create GitHub release
+      - name: Create or sync GitHub release (gh)
+        # Notes are the git-cliff section for this tag (same source as
+        # CHANGELOG.md), created or edited idempotently; the script also
+        # verifies the npm-published version matches the tag.
         if: steps.release-pr.outputs.on_main == 'true'
         env:
           RELEASE_VERSION: ${{ steps.versions.outputs.release_version }}
           GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          if gh release view "v${RELEASE_VERSION}" >/dev/null 2>&1; then
-            echo "GitHub release v${RELEASE_VERSION} already exists; skipping."
-          else
-            # Notes cover only this release: anchor on the exact
-            # "## [${RELEASE_VERSION}]" heading (git-cliff writes the version
-            # without the "v" prefix) and stop at the next "## [" section.
-            # Fail closed when the section is missing instead of copying the
-            # whole changelog.
-            NOTES="$(
-              awk -v heading="## [${RELEASE_VERSION}]" '
-                index($0, heading) == 1 { in_release = 1 }
-                in_release && /^## \[/ && index($0, heading) != 1 { exit }
-                in_release { print }
-              ' CHANGELOG.md
-            )"
-            if [ -z "$NOTES" ]; then
-              echo "::error::No changelog section found for ${RELEASE_VERSION}"
-              exit 1
-            fi
-            gh release create "v${RELEASE_VERSION}" dist/iconsur-arm64 dist/iconsur-x64 \
-              --notes "$NOTES"
-          fi
+        run: bash scripts/release-sync.sh "$RELEASE_VERSION" dist/iconsur-arm64 dist/iconsur-x64

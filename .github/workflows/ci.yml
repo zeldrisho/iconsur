@@ -7,7 +7,13 @@ on:
 jobs:
   check:
     name: Check, test, and build
-    runs-on: ubuntu-latest
+    # macOS runner: the only shipped artifact is the macOS binary, so CI must
+    # be able to execute it (a broken binary — e.g. a bad lipo/universal merge
+    # — passes an ubuntu build step but fails at runtime). Native `lipo`,
+    # `osascript`, and the `open` preview feature also only exist here.
+    runs-on: macos-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
       - name: Set up Vite+ (vp)
@@ -22,3 +28,14 @@ jobs:
         run: vp test
       - name: Build binaries (macOS arm64 + x64)
         run: vp run build
+      - name: Smoke-test the built binary
+        # Cross-compiled binaries must at least start. The x64 slice only runs
+        # under Rosetta (not guaranteed on the runner), so execute the native
+        # architecture.
+        run: |
+          case "$(uname -m)" in
+            arm64) BIN=dist/iconsur-arm64 ;;
+            x86_64) BIN=dist/iconsur-x64 ;;
+            *) echo "unexpected runner arch"; exit 1 ;;
+          esac
+          "$BIN" --version

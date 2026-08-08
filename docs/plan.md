@@ -140,6 +140,15 @@ Goal: **zero `sudo` by default**. Elevation happens only (a) for an optional sys
   - Keep AGENTS.md minimal (per the agents-md skill); the plan remains discoverable via `docs/development.md`.
 - [x] Ran `vp config --no-agent`; AGENTS.md left untouched by the hook setup and cleaned of `docs/plan.md` references.
 
+## 12. Preview compare + release tooling (P1, 2026-08)
+
+- [x] `set` preview prompt defaults to **Y** (plain Enter applies) — `parseApplyAnswer` in `src/icon.ts`.
+- [x] Interactive `set` auto-opens the generated preview and the app's current icon (`Icon\r` resource-fork payload if set by a previous `iconsur set`, else the bundled icon) in Preview for side-by-side comparison before the prompt — `extractOldIcon` + `openForComparison`. macOS-only, best-effort (never throws), and never runs in `-y`/non-TTY sessions.
+- [x] **Universal binary researched, not shipped**: `lipo -create` of the two pkg binaries yields a fat Mach-O that cannot start — pkg's bootstrap reads its own slice at a fixed offset, so a fat file throws `SyntaxError` at `pkg/prelude/bootstrap.js` (vercel/pkg#1597, unfixed; @yao-pkg/pkg 6.22.0 latest has no universal target). Size would roughly double (measured: arm64 66M + x64 68M ≈ 135M). Keep per-arch binaries; see `docs/release.md`.
+- [x] CI moved to `macos-latest` so the only shipped artifact (the macOS binary) is **executed**, not just built: new smoke-test step runs the native-arch binary (`--version`). ubuntu CI could pass while shipping a broken binary (the lipo experiment above is exactly such a case).
+- [x] git-cliff cleanup: `cliff.toml` uses the current schema (`filter_unconventional = false`, `tag_pattern = "v[0-9].*"`); regeneration verified byte-identical to the committed `CHANGELOG.md` on main; release notes no longer use the awk extraction — `git-cliff --latest --tag --strip all` produces exactly the tag's section.
+- [x] Release sync via `gh`: new `scripts/release-sync.sh` creates/edits the GitHub release (notes from git-cliff, idempotent) and verifies the npm-published version matches the tag; `tests/repo-metadata.test.ts` keeps package.json name/description/repository in sync with README (description now reads "styled" to match the README wording).
+
 ---
 
 ## Appendix: verified research findings (2026-08)
