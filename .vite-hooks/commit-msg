@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+# Enforce conventional commits (git-cliff drives versioning from them).
+vp exec commitlint -e

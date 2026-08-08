@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+# Run staged-file checks (see the `staged` block in vite.config.ts).
+# Opt out per-invocation with VP_GIT_HOOKS=0 (dispatcher exits early).
+vp staged
