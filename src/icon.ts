@@ -4,6 +4,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createInterface } from "node:readline";
 import * as icns from "icns-lib";
 import { resolveAsset } from "./assets.ts";
 import { runWithEscalation, setCustomIcon } from "./fileicon.ts";
@@ -18,6 +19,8 @@ export interface IconOptions {
   color?: string;
   input?: string;
   output?: string;
+  /** Skip the apply confirmation prompt (interactive preview). */
+  yes?: boolean;
 }
 
 export interface AppIdentity {
@@ -204,12 +207,39 @@ export async function processApp(appDir: string, opts: IconOptions): Promise<voi
     console.log(`Successfully saved icon for ${appDir} at ${outputPath}\n`);
   } else {
     const tmpFile = tempPath("tmp-icon");
-    await image.write(`${tmpFile}.png`);
-    runWithEscalation(
-      resolved,
-      (o) => setCustomIcon(resolved, `${tmpFile}.png`, o),
-      "Setting icon for",
-    );
+    const pngPath = `${tmpFile}.png`;
+    await image.write(pngPath as `${string}.${string}`);
+    await applyWithPreview(resolved, pngPath, opts.yes ?? false);
     console.log(`Successfully set icon for ${appDir}\n`);
+  }
+}
+
+/**
+ * Applies the generated preview to the app. In an interactive terminal the
+ * preview path is shown and the user is asked to confirm; non-interactive
+ * runs (scripts, CI) apply directly. `yes` forces apply without prompting.
+ */
+async function applyWithPreview(appDir: string, previewPath: string, yes: boolean): Promise<void> {
+  const apply = (): void =>
+    runWithEscalation(appDir, (o) => setCustomIcon(appDir, previewPath, o), "Setting icon for");
+  if (yes || !process.stdin.isTTY) {
+    apply();
+    return;
+  }
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const answer = await new Promise<string>((resolve) => {
+      rl.question(`Generated preview at ${previewPath}\nApply icon to ${appDir}? [y/N] `, resolve);
+    });
+    if (!/^y(es)?$/i.test(answer.trim())) {
+      console.log(`\nIcon not applied. Preview kept at ${previewPath}.`);
+      console.log(
+        `Re-run the same command to apply it, or revert an applied icon with: iconsur unset ${appDir}`,
+      );
+      return;
+    }
+    apply();
+  } finally {
+    rl.close();
   }
 }

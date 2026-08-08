@@ -13,6 +13,8 @@ export interface CliOptions {
   color?: string;
   input?: string;
   output?: string;
+  /** Skip the apply confirmation prompt. */
+  yes?: boolean;
 }
 
 function expandDirs(dir: string, otherDirs: string[]): string[] {
@@ -36,6 +38,7 @@ export function buildProgram(version: string): Command {
     "-o, --output <path>",
     "Write the generated icon to a file without actually applying to App",
   );
+  program.option("-y, --yes", "Apply the generated icon without the confirmation prompt");
 
   program.command("set <dir> [otherDirs...]").action(async (dir: string, otherDirs: string[]) => {
     const opts = program.opts<CliOptions>();
@@ -48,6 +51,7 @@ export function buildProgram(version: string): Command {
         color: opts.color,
         input: opts.input,
         output: opts.output,
+        yes: opts.yes,
       });
     }
   });
