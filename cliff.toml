@@ -29,6 +29,13 @@ footer = """
 
 [git]
 conventional_commits = true
+# Keep unconventional commits: the catch-all `{ message = ".*", group = "Other" }`
+# parser below buckets them into "Other" instead of dropping them (this is the
+# `filter_unconventional = false` behavior in current git-cliff; the legacy
+# `filter_commits` name for the same switch is gone).
+filter_unconventional = false
+# Only our own semver tags (v<major>.<minor>.<patch>) feed versioning.
+tag_pattern = "v[0-9].*"
 commit_parsers = [
   { message = "^feat(?:\\([^)]*\\))?!?:", group = "Features" },
   { message = "^fix(?:\\([^)]*\\))?!?:", group = "Bug Fixes" },
@@ -45,7 +52,6 @@ commit_parsers = [
   { message = "^chore(?:\\([^)]*\\))?!?:", group = "Chore" },
   { message = ".*", group = "Other" },
 ]
-filter_commits = false
 # Breaking changes are signalled by `!` or a BREAKING CHANGE footer.
 
 [bump]
