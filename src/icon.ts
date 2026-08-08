@@ -121,14 +121,132 @@ export async function extractOldIcon(
   if (image === null) {
     return null;
   }
+  let oldIcon: JimpInstance | null = null;
   try {
-    const oldIcon = await Jimp.read(image);
+    oldIcon = await Jimp.read(image);
+  } catch {
+    const legacy = legacyIcnsImage(image);
+    if (legacy) {
+      oldIcon = jimpFromRgba(legacy.width, legacy.data);
+    }
+  }
+  if (!oldIcon) {
+    return null;
+  }
+  try {
     const oldPath = `${tempPath("old-icon")}.png`;
     await oldIcon.write(oldPath as `${string}.${string}`);
     return oldPath;
   } catch {
     return null;
   }
+}
+
+/**
+ * True when `dir` looks like an app bundle: either the conventional `.app`
+ * suffix or the bundle marker `Contents/Info.plist`. Some Steam games ship
+ * as bare bundles without the extension (e.g. `Stardew Valley`), which
+ * Finder and LaunchServices still treat as apps.
+ */
+export function isAppBundle(dir: string): boolean {
+  return dir.endsWith(".app") || fs.existsSync(path.join(dir, "Contents", "Info.plist"));
+}
+
+/**
+ * Legacy ICNS RGB+mask chunk pairs (16/32/128/256 px). Modern ICNS files
+ * embed standalone PNG/JP2 payloads (handled by icns-lib above), but older
+ * ones — still shipped by many Steam mac games, e.g. Stardew Valley — store
+ * Apple-RLE-compressed RGB plus a raw 8-bit alpha mask instead.
+ */
+const LEGACY_ICNS_TYPES = [
+  { size: 16, rgb: "is32", mask: "s8mk" },
+  { size: 32, rgb: "il32", mask: "l8mk" },
+  { size: 128, rgb: "it32", mask: "t8mk" },
+  { size: 256, rgb: "ih32", mask: "h8mk" },
+] as const;
+
+/**
+ * Decompresses an Apple RLE stream as found in legacy ICNS RGB chunks: a
+ * high-bit count byte repeats the next byte (count & 0x7f + 3 times), a
+ * low-bit count byte is followed by (count + 1) literal bytes.
+ */
+export function decodeAppleRle(data: Buffer): Buffer {
+  // Repeat runs expand at most 65x (2 input bytes -> up to 130 output);
+  // overallocate generously and trim with subarray below.
+  const out = Buffer.alloc(data.length * 64);
+  let o = 0;
+  for (let i = 0; i < data.length;) {
+    const b = data[i];
+    if (b & 0x80) {
+      const count = (b & 0x7f) + 3;
+      out.fill(data[i + 1], o, o + count);
+      o += count;
+      i += 2;
+    } else {
+      const count = b + 1;
+      data.copy(out, o, i + 1, i + 1 + count);
+      o += count;
+      i += 1 + count;
+    }
+  }
+  return out.subarray(0, o);
+}
+
+/**
+ * Extracts the largest legacy ICNS RGB+mask pair as interleaved RGBA, or
+ * null when the buffer is not an ICNS or holds no legacy chunks. `it32`/
+ * `ih32` payloads may carry a leading 4-byte length field; both the plain
+ * and offset layouts are tried and accepted by exact decompressed size.
+ */
+export function legacyIcnsImage(iconBuffer: Buffer): { width: number; data: Buffer } | null {
+  if (iconBuffer.length < 8 || iconBuffer.subarray(0, 4).toString("ascii") !== "icns") {
+    return null;
+  }
+  const chunks = new Map<string, Buffer>();
+  let body = iconBuffer.subarray(8);
+  while (body.length >= 8) {
+    const type = body.subarray(0, 4).toString("ascii");
+    const size = body.readUInt32BE(4);
+    chunks.set(type, body.subarray(8, size));
+    body = body.subarray(size);
+  }
+  for (const { size, rgb, mask } of [...LEGACY_ICNS_TYPES].reverse()) {
+    const rgbChunk = chunks.get(rgb);
+    const maskChunk = chunks.get(mask);
+    if (!rgbChunk || !maskChunk || maskChunk.length !== size * size) {
+      continue;
+    }
+    const expected = size * size * 3;
+    const candidates =
+      rgb === "it32" || rgb === "ih32"
+        ? [rgbChunk, rgbChunk.length >= 4 ? rgbChunk.subarray(4) : null]
+        : [rgbChunk];
+    for (const candidate of candidates) {
+      if (!candidate) {
+        continue;
+      }
+      const rgb = decodeAppleRle(candidate);
+      if (rgb.length !== expected) {
+        continue;
+      }
+      const rgba = Buffer.alloc(size * size * 4);
+      for (let p = 0; p < size * size; p++) {
+        rgba[p * 4] = rgb[p * 3];
+        rgba[p * 4 + 1] = rgb[p * 3 + 1];
+        rgba[p * 4 + 2] = rgb[p * 3 + 2];
+        rgba[p * 4 + 3] = maskChunk[p];
+      }
+      return { width: size, data: rgba };
+    }
+  }
+  return null;
+}
+
+/** Builds a Jimp image from raw interleaved RGBA (legacy ICNS decode). */
+function jimpFromRgba(width: number, data: Buffer): JimpInstance {
+  const image = new Jimp({ width, height: data.length / width / 4 });
+  image.bitmap.data.set(data);
+  return image;
 }
 
 /**
@@ -224,10 +342,15 @@ async function generateLocalIcon(identity: AppIdentity, opts: IconOptions): Prom
   try {
     originalIcon = await Jimp.read(iconBuffer);
   } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    throw new Error(
-      `Failed to read original icon: ${message}\nRe-run with option -i or --input to use a custom image for generation.`,
-    );
+    const legacy = legacyIcnsImage(iconBuffer);
+    if (legacy === null) {
+      const message = e instanceof Error ? e.message : String(e);
+      throw new Error(
+        `Failed to read original icon: ${message}\nRe-run with option -i or --input to use a custom image for generation.`,
+      );
+    }
+    console.log(`Decoded legacy ICNS icon (${legacy.width}x${legacy.width})`);
+    originalIcon = jimpFromRgba(legacy.width, legacy.data);
   }
 
   let originalIconScaleSize: number;
@@ -258,8 +381,10 @@ export async function processApp(appDir: string, opts: IconOptions): Promise<voi
   if (!stat?.isDirectory()) {
     throw new Error(`${resolved}: No such directory`);
   }
-  if (!resolved.endsWith(".app")) {
-    throw new Error(`${resolved}: Not an App directory`);
+  if (!isAppBundle(resolved)) {
+    throw new Error(
+      `${resolved}: Not an App directory (expected a .app bundle or a directory with Contents/Info.plist)`,
+    );
   }
 
   const identity = resolveIdentity(resolved, opts);

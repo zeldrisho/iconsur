@@ -25,12 +25,12 @@ Subcommands:
 
 ## Icon generation pipeline (`set`)
 
-1. **Validate the app dir** — resolve the path, require it to exist and end with `.app`.
+1. **Validate the app dir** — resolve the path, require it to exist and be an app bundle: either the `.app` suffix or a directory containing `Contents/Info.plist` (Steam games like `Stardew Valley` ship as bare bundles without the extension).
 2. **Resolve identity** — convert `Contents/Info.plist` to XML with `plutil`, parse with `plist` (`src/plist.ts`); fall back to the directory name and `Contents/Resources/AppIcon.icns` if the plist is unreadable.
 3. **Source icon** — unless `--local`/`--input` is set, query the iTunes Search API:
    `https://itunes.apple.com/search?media=software&entity=software,iPadSoftware&term=<encoded name>&country=<region>&limit=1`
    and download `artworkUrl512` (falling back to `artworkUrl100`). If no result, fall through to local generation.
-4. **Local generation** — read the ICNS, extract the largest embedded image with `icns-lib`; JP2 payloads are decoded by the vendored `openjpeg.ts` via the custom format plugin registered in `src/jimp.ts` (`createJimp` from `@jimp/core` with a decoder-only `image/jp2` format — jimp 0.x's global `jimp.decoders` mutation no longer exists). Opaque icons are `cover`-filled to the icon box; alpha icons are `contain`-ed at the requested scale (jimp 1.x option-object API: `{ w, h }`).
+4. **Local generation** — read the ICNS, extract the largest embedded image with `icns-lib`; JP2 payloads are decoded by the vendored `openjpeg.ts` via the custom format plugin registered in `src/jimp.ts` (`createJimp` from `@jimp/core` with a decoder-only `image/jp2` format — jimp 0.x's global `jimp.decoders` mutation no longer exists). Legacy ICNS files without modern PNG/JP2 payloads (old Steam mac games like Stardew Valley) fall back to `legacyIcnsImage` (`src/icon.ts`), which decompresses Apple-RLE RGB chunks (`is32`/`il32`/`it32`/`ih32`, handling the 4-byte `it32`/`ih32` length-field quirk) and composes them with the raw 8-bit masks (`s8mk`/`l8mk`/`t8mk`/`h8mk`) into RGBA. Opaque icons are `cover`-filled to the icon box; alpha icons are `contain`-ed at the requested scale (jimp 1.x option-object API: `{ w, h }`).
 5. **Compose the canvas** — create a 1024×1024 image, fill with the background color, composite the icon at 100px padding (icon box = 824×824), then apply `mask.png` with a per-pixel AND (`mask & pixel`), which rounds the corners.
 6. **Apply** — write to a temp PNG, then show the preview path and ask for confirmation in an interactive terminal (`-y/--yes` skips; non-interactive runs apply directly), then `fileicon.ts set <appDir> <png>`. Declining keeps the original icon and leaves the preview on disk. `--output` (coerced to `.png`) skips the prompt entirely.
 

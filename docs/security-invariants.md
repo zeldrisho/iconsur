@@ -13,7 +13,7 @@
 
 ## Input handling
 
-- **App directories** are user-controlled but validated: must resolve to an existing directory ending in `.app`. Glob expansion happens through `glob` before validation.
+- **App directories** are user-controlled but validated: must resolve to an existing directory that is an app bundle — either ending in `.app` or containing `Contents/Info.plist` (bare Steam bundles like `Stardew Valley`). Glob expansion happens through `glob` before validation.
 - **Search keyword** is URL-encoded with `encodeURIComponent` before being embedded in the iTunes Search API request. It is also printed to stdout — never log anything sensitive into it.
 - **Background color** (`-c`) is passed to the Jimp constructor as a hex string; **scale** (`-s`) is parsed with `parseFloat` and used arithmetically only.
 - **Temp files** are created in `os.tmpdir()` with random 6-8 character suffixes.
