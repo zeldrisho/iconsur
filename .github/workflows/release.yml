@@ -116,9 +116,6 @@ jobs:
           # main through the "Merge release commit to main" step below,
           # because the Protect ruleset requires changes to go via a PR.
           git push origin "refs/tags/v${RELEASE_VERSION}"
-      - name: Build binaries (macOS arm64 + x64)
-        if: steps.versions.outputs.release_version != ''
-        run: vp run build
       - name: Merge release commit to main
         # The Protect ruleset on main forbids direct pushes, so the release
         # commit (package.json + CHANGELOG.md) is merged through a PR that
@@ -187,6 +184,14 @@ jobs:
           else
             vp exec pnpm publish --access public --no-git-checks
           fi
+      - name: Build binaries (macOS arm64 + x64)
+        # Runs after publish: the pnpm pack triggered by publish runs the
+        # prepack script (`vp pack --no-clean` + mask.png) to rebuild
+        # dist/index.cjs for the npm tarball, so this build must come later
+        # to keep the pkg binaries out of the tarball and fresh for the
+        # GitHub release below.
+        if: steps.versions.outputs.release_version != ''
+        run: vp run build
       - name: Create GitHub release
         if: steps.versions.outputs.release_version != ''
         env:
