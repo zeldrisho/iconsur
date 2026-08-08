@@ -161,8 +161,8 @@ export function isAppBundle(dir: string): boolean {
 const LEGACY_ICNS_TYPES = [
   { size: 16, rgb: "is32", mask: "s8mk" },
   { size: 32, rgb: "il32", mask: "l8mk" },
+  { size: 48, rgb: "ih32", mask: "h8mk" },
   { size: 128, rgb: "it32", mask: "t8mk" },
-  { size: 256, rgb: "ih32", mask: "h8mk" },
 ] as const;
 
 /**
@@ -173,7 +173,7 @@ const LEGACY_ICNS_TYPES = [
 export function decodeAppleRle(data: Buffer): Buffer {
   // Repeat runs expand at most 65x (2 input bytes -> up to 130 output);
   // overallocate generously and trim with subarray below.
-  const out = Buffer.alloc(data.length * 64);
+  const out = Buffer.alloc(data.length * 65);
   let o = 0;
   for (let i = 0; i < data.length;) {
     const b = data[i];
@@ -207,6 +207,9 @@ export function legacyIcnsImage(iconBuffer: Buffer): { width: number; data: Buff
   while (body.length >= 8) {
     const type = body.subarray(0, 4).toString("ascii");
     const size = body.readUInt32BE(4);
+    if (size < 8 || size > body.length) {
+      return null;
+    }
     chunks.set(type, body.subarray(8, size));
     body = body.subarray(size);
   }
@@ -230,10 +233,11 @@ export function legacyIcnsImage(iconBuffer: Buffer): { width: number; data: Buff
         continue;
       }
       const rgba = Buffer.alloc(size * size * 4);
-      for (let p = 0; p < size * size; p++) {
-        rgba[p * 4] = rgb[p * 3];
-        rgba[p * 4 + 1] = rgb[p * 3 + 1];
-        rgba[p * 4 + 2] = rgb[p * 3 + 2];
+      const planeSize = size * size;
+      for (let p = 0; p < planeSize; p++) {
+        rgba[p * 4] = rgb[p];
+        rgba[p * 4 + 1] = rgb[planeSize + p];
+        rgba[p * 4 + 2] = rgb[planeSize * 2 + p];
         rgba[p * 4 + 3] = maskChunk[p];
       }
       return { width: size, data: rgba };

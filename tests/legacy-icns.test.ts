@@ -32,15 +32,16 @@ function buildIcns(chunks: Record<string, Buffer>): Buffer {
   return out;
 }
 
-/** Interleaved RGB for a WxH image: pixel (x, y) = (x, y, x ^ y). */
+/** Planar RGB for a WxH image: pixel (x, y) = (x, y, x ^ y). */
 function rgbPattern(width: number, height: number): Buffer {
   const rgb = Buffer.alloc(width * height * 3);
+  const planeSize = width * height;
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      const i = (y * width + x) * 3;
-      rgb[i] = x & 0xff;
-      rgb[i + 1] = y & 0xff;
-      rgb[i + 2] = (x ^ y) & 0xff;
+      const p = y * width + x;
+      rgb[p] = x & 0xff;
+      rgb[planeSize + p] = y & 0xff;
+      rgb[planeSize * 2 + p] = (x ^ y) & 0xff;
     }
   }
   return rgb;
@@ -71,6 +72,12 @@ describe("Apple RLE decompression", () => {
   it("round-trips a literal-encoded RGB stream", () => {
     const source = rgbPattern(16, 16);
     expect(decodeAppleRle(literalRle(source))).toEqual(source);
+  });
+
+  it("handles maximum 130-byte repeat run (0xff, value)", () => {
+    // 0xff & 0x7f = 127 -> 127 + 3 = 130 copies of 0xaa
+    const decoded = decodeAppleRle(Buffer.from([0xff, 0xaa]));
+    expect(decoded).toEqual(Buffer.alloc(130, 0xaa));
   });
 });
 
@@ -112,8 +119,35 @@ describe("legacy ICNS decoding", () => {
     expect(image?.data.length).toBe(128 * 128 * 4);
   });
 
+  it("processes ih32 type at 48x48 with prefixed payload", () => {
+    const rgb = literalRle(rgbPattern(48, 48));
+    const prefixed = Buffer.concat([Buffer.from([0, 0, 0, 0]), rgb]);
+    const icns = buildIcns({ ih32: prefixed, h8mk: Buffer.alloc(48 * 48, 0xff) });
+    const image = legacyIcnsImage(icns);
+    expect(image?.width).toBe(48);
+    expect(image?.data.length).toBe(48 * 48 * 4);
+  });
+
   it("returns null for non-ICNS buffers", () => {
     expect(legacyIcnsImage(Buffer.from("not an icns file at all"))).toBeNull();
+  });
+
+  it("rejects ICNS with invalid chunk sizes", () => {
+    // Build a malformed ICNS with chunk size too small (< 8)
+    const bad1 = Buffer.alloc(20);
+    bad1.write("icns", 0, "ascii");
+    bad1.writeUInt32BE(20, 4); // total size
+    bad1.write("is32", 8, "ascii");
+    bad1.writeUInt32BE(4, 12); // chunk size too small (< 8)
+    expect(legacyIcnsImage(bad1)).toBeNull();
+
+    // Build a malformed ICNS with chunk size larger than remaining body
+    const bad2 = Buffer.alloc(20);
+    bad2.write("icns", 0, "ascii");
+    bad2.writeUInt32BE(20, 4); // total size
+    bad2.write("is32", 8, "ascii");
+    bad2.writeUInt32BE(500, 12); // chunk size too large
+    expect(legacyIcnsImage(bad2)).toBeNull();
   });
 });
 
