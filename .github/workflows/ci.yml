@@ -8,6 +8,8 @@ jobs:
   check:
     name: Check, test, and build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
       - name: Set up Vite+ (vp)
