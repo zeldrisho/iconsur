@@ -4,7 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 import { buildProgram } from "../src/cli.ts";
 import { Jimp } from "../src/jimp.ts";
-import { resolveIdentity } from "../src/icon.ts";
+import { isAppBundle, resolveIdentity } from "../src/icon.ts";
 
 /** Creates a fresh temp directory for one test. */
 function tempDir(): string {
@@ -39,6 +39,53 @@ describe("CLI arg parsing (commander)", () => {
     const out = await Jimp.read(outPath);
     expect(out.width).toBe(1024);
     expect(out.height).toBe(1024);
+  });
+
+  it("generates an icon for a bare bundle without the .app suffix", async () => {
+    const dir = tempDir();
+    const appDir = path.join(dir, "Stardew Valley");
+    fs.mkdirSync(path.join(appDir, "Contents"), { recursive: true });
+    fs.writeFileSync(
+      path.join(appDir, "Contents/Info.plist"),
+      `<plist version="1.0"><dict><key>CFBundleDisplayName</key><string>Stardew Valley</string></dict></plist>`,
+    );
+    const srcPath = path.join(dir, "src.png");
+    await new Jimp({ width: 100, height: 100, color: "#ff8800" }).write(
+      srcPath as `${string}.${string}`,
+    );
+    const outPath = path.join(dir, "out.png");
+
+    const program = buildProgram("9.9.9");
+    await program.parseAsync(["set", appDir, "-l", "-i", srcPath, "-o", outPath], {
+      from: "user",
+    });
+
+    const out = await Jimp.read(outPath);
+    expect(out.width).toBe(1024);
+    expect(out.height).toBe(1024);
+  });
+});
+
+describe("app-bundle detection", () => {
+  it("accepts a conventional .app bundle", () => {
+    const dir = tempDir();
+    const appDir = makeAppDir(dir, "Test");
+    expect(isAppBundle(appDir)).toBe(true);
+  });
+
+  it("accepts a bare bundle without the .app suffix (Steam-style)", () => {
+    const dir = tempDir();
+    const appDir = path.join(dir, "Stardew Valley");
+    fs.mkdirSync(path.join(appDir, "Contents"), { recursive: true });
+    fs.writeFileSync(path.join(appDir, "Contents/Info.plist"), "<plist version='1.0'/>");
+    expect(isAppBundle(appDir)).toBe(true);
+  });
+
+  it("rejects a plain directory without Contents/Info.plist", () => {
+    const dir = tempDir();
+    const plainDir = path.join(dir, "not-an-app");
+    fs.mkdirSync(plainDir, { recursive: true });
+    expect(isAppBundle(plainDir)).toBe(false);
   });
 });
 
