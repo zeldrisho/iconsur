@@ -1,0 +1,5 @@
+{
+  "pkg": {
+    "assets": ["src/mask.png", "dist/mask.png", "package.json"]
+  }
+}

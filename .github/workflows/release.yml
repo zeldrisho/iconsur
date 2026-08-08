@@ -1,0 +1,125 @@
+name: Release
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  id-token: write # Required for npm Trusted Publishing (OIDC)
+
+# No NPM_AUTH_TOKEN secret is needed: the publish step below authenticates
+# via the trusted publisher configured for @zeldrisho/iconsur on npmjs.com.
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # Must match the environment claim of the npm trusted publisher for
+    # @zeldrisho/iconsur (configured with `npm trust github`). GitHub
+    # auto-creates this environment on first run; add protection rules
+    # here if you want a manual approval gate before publishing.
+    environment: publish
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Set up Vite+ (vp)
+        uses: voidzero-dev/setup-vp@v1.17.0
+        with:
+          node-version: "24"
+          cache: true
+          run-install: true
+      - name: Configure Git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Compute next version and release state
+        id: versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          LAST_TAG="$(git describe --tags --abbrev=0 2>/dev/null || echo v0.0.0)"
+          NEXT_VERSION="$(vp exec git-cliff --config cliff.toml --bumped-version 2>/dev/null | tail -n 1)"
+          # Versions are stored without the "v" prefix; tags are built as "v${VERSION}".
+          LAST_TAG="${LAST_TAG#v}"
+          NEXT_VERSION="${NEXT_VERSION#v}"
+          RELEASE_VERSION=""
+          RESUME="false"
+          if [ -n "$NEXT_VERSION" ] && [ "$NEXT_VERSION" != "$LAST_TAG" ]; then
+            # Fresh or resumed release for the computed version.
+            RELEASE_VERSION="$NEXT_VERSION"
+            if git rev-parse -q --verify "refs/tags/v${RELEASE_VERSION}" >/dev/null 2>&1; then
+              # Tag exists -> a prior run failed after the tag push; resume it.
+              RESUME="true"
+            fi
+          elif [ "$LAST_TAG" != "0.0.0" ]; then
+            # No new commits: the latest tag may still be an incomplete
+            # release (e.g. a previous run failed after pushing it).
+            NPM_PUBLISHED="false"
+            GH_RELEASED="false"
+            npm view "@zeldrisho/iconsur@${LAST_TAG}" version >/dev/null 2>&1 && NPM_PUBLISHED="true"
+            gh release view "v${LAST_TAG}" >/dev/null 2>&1 && GH_RELEASED="true"
+            if [ "$NPM_PUBLISHED" != "true" ] || [ "$GH_RELEASED" != "true" ]; then
+              RELEASE_VERSION="$LAST_TAG"
+              RESUME="true"
+            fi
+          fi
+          echo "last_tag=$LAST_TAG" >> "$GITHUB_OUTPUT"
+          echo "next_version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "resume=$RESUME" >> "$GITHUB_OUTPUT"
+      - name: Skip when there is nothing to release
+        if: steps.versions.outputs.release_version == ''
+        run: |
+          echo "No releasable commits since v${LAST_TAG} and the latest version is already published; skipping release."
+        env:
+          LAST_TAG: ${{ steps.versions.outputs.last_tag }}
+      - name: Update version and changelog
+        if: steps.versions.outputs.release_version != '' && steps.versions.outputs.resume == 'false'
+        env:
+          RELEASE_VERSION: ${{ steps.versions.outputs.release_version }}
+        run: |
+          set -euo pipefail
+          vp exec git-cliff --config cliff.toml --tag "v${RELEASE_VERSION}" -o CHANGELOG.md
+          npm version "$RELEASE_VERSION" --no-git-tag-version
+          git add package.json CHANGELOG.md
+          if git diff --cached --quiet; then
+            echo "Version and changelog already committed by a prior run; not creating a duplicate commit."
+          else
+            git commit -m "chore(release): v${RELEASE_VERSION}"
+          fi
+          if ! git rev-parse -q --verify "refs/tags/v${RELEASE_VERSION}" >/dev/null 2>&1; then
+            git tag "v${RELEASE_VERSION}"
+          fi
+          git push origin main --tags
+      - name: Build binaries (macOS arm64 + x64)
+        if: steps.versions.outputs.release_version != ''
+        run: vp run build
+      - name: Publish to npm (trusted publishing / OIDC)
+        if: steps.versions.outputs.release_version != ''
+        env:
+          RELEASE_VERSION: ${{ steps.versions.outputs.release_version }}
+        # No NODE_AUTH_TOKEN here: setting it would make npm use the legacy
+        # token path instead of the OIDC trusted publisher. The npm CLI
+        # detects the GitHub Actions OIDC environment automatically.
+        run: |
+          set -euo pipefail
+          if npm view "@zeldrisho/iconsur@${RELEASE_VERSION}" version >/dev/null 2>&1; then
+            echo "v${RELEASE_VERSION} is already published to npm; skipping."
+          else
+            npm publish --access public
+          fi
+      - name: Create GitHub release
+        if: steps.versions.outputs.release_version != ''
+        env:
+          RELEASE_VERSION: ${{ steps.versions.outputs.release_version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "v${RELEASE_VERSION}" >/dev/null 2>&1; then
+            echo "GitHub release v${RELEASE_VERSION} already exists; skipping."
+          else
+            gh release create "v${RELEASE_VERSION}" dist/iconsur-arm64 dist/iconsur-x64 \
+              --notes-file CHANGELOG.md
+          fi
