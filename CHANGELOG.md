@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 ## [unreleased]
 
+### Build
+
+- Adopt vp toolchain, commit hooks, and git-cliff release pipeline
+
+### Documentation
+
+- Update README, maintainer docs, and AGENTS.md for the migration
+
+### Features
+
+- Migrate to TypeScript 7 ESM with native fileicon and sudo-free cache
+
+## [1.7.0](https://github.com/zeldrisho/iconsur/releases/tag/v1.7.0) - 2026-08-08
+
 ### Bug Fixes
 
 - Remove outputs during cache update
