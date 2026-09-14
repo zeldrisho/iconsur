@@ -8,7 +8,7 @@
 2. `src/plist.ts` identifies an app and its bundled icon. App targets must be directories ending in `.app` or containing `Contents/Info.plist`.
 3. `src/icon.ts` obtains artwork from the iTunes Search API or decodes the local ICNS icon. Legacy ICNS RGB/mask resources and JPEG 2000 payloads are supported.
 4. The icon is composed on a colored canvas and rounded with `src/mask.png`.
-5. `src/fileicon.ts` applies or removes the custom icon using `osascript`, `xattr`, and `rm`.
+5. `src/fileicon.ts` applies and removes custom icons through the AppKit `NSWorkspace` API via `osascript`.
 6. `src/cache.ts` clears per-user caches and restarts Finder and Dock.
 
 `--output` stops after writing a PNG. Interactive `set` previews the generated and current icons before applying; `--yes` and non-interactive execution skip confirmation.

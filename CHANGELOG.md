@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Use AppKit’s `NSWorkspace` API to set and remove custom icons without invoking `xattr` or `rm`.
+- Replace per-user icon-cache `find`/`rm` cleanup with direct filesystem traversal.
+
 ## [2.2.1](https://github.com/zeldrisho/iconsur/releases/tag/v2.2.1) - 2026-09-14
 
 ### Bug Fixes

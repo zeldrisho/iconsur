@@ -1,14 +1,21 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   clearIconCache,
-  PER_USER_CACHE_FIND,
+  PER_USER_CACHE_NAMES,
+  PER_USER_CACHE_ROOT,
   setCacheCommandRunner,
+  setCacheFileCleaner,
   SYSTEM_ICON_SERVICES_STORE,
 } from "../src/cache.ts";
 
 describe("cache command construction", () => {
-  it("runs per-user cleanup and restarts both UI processes without sudo", () => {
+  it("cleans per-user caches and restarts both UI processes without sudo", () => {
     const calls: string[][] = [];
+    const cleanup: Array<{ root: string; names: readonly string[] }> = [];
+
+    const previousCleaner = setCacheFileCleaner((root, names) => {
+      cleanup.push({ root, names });
+    });
 
     const previous = setCacheCommandRunner((args) => {
       calls.push(args);
@@ -20,10 +27,11 @@ describe("cache command construction", () => {
       clearIconCache();
     } finally {
       setCacheCommandRunner(previous);
+      setCacheFileCleaner(previousCleaner);
     }
 
+    expect(cleanup).toEqual([{ root: PER_USER_CACHE_ROOT, names: PER_USER_CACHE_NAMES }]);
     expect(calls).toEqual([
-      ["find", ...PER_USER_CACHE_FIND],
       ["killall", "Dock"],
       ["killall", "Finder"],
     ]);
@@ -32,6 +40,7 @@ describe("cache command construction", () => {
 
   it("does not attempt a password prompt for system cleanup in non-interactive mode", () => {
     const calls: string[][] = [];
+    const previousCleaner = setCacheFileCleaner(() => {});
 
     const previous = setCacheCommandRunner((args) => {
       calls.push(args);
@@ -47,18 +56,16 @@ describe("cache command construction", () => {
     } finally {
       Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: originalTTY });
       setCacheCommandRunner(previous);
+      setCacheFileCleaner(previousCleaner);
     }
 
     expect(calls).toContainEqual(["sudo", "-n", "true"]);
     expect(calls).not.toContainEqual(["sudo", "rm", "-rf", SYSTEM_ICON_SERVICES_STORE]);
   });
-  it("clears per-user caches without sudo (constant argv, no shell interpolation)", () => {
-    expect(PER_USER_CACHE_FIND[0]).toBe("/private/var/folders/");
-    expect(PER_USER_CACHE_FIND).toContain("com.apple.dock.iconcache");
-    expect(PER_USER_CACHE_FIND).toContain("com.apple.iconservices");
-    expect(PER_USER_CACHE_FIND).not.toContain("sudo");
-    // find -exec rm -rf {} ; — the terminator is a separate argv element.
-    expect(PER_USER_CACHE_FIND[PER_USER_CACHE_FIND.length - 1]).toBe(";");
+
+  it("keeps per-user cache cleanup scoped to the known cache names", () => {
+    expect(PER_USER_CACHE_ROOT).toBe("/private/var/folders/");
+    expect(PER_USER_CACHE_NAMES).toEqual(["com.apple.dock.iconcache", "com.apple.iconservices"]);
   });
 
   it("keeps the system-wide store behind the explicit --system flag", () => {
