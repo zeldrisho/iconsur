@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.1](https://github.com/zeldrisho/iconsur/releases/tag/v2.2.1) - 2026-09-14
+
+### Bug Fixes
+
+- Harden legacy ICNS decoding with bounded decompression and stricter validation.
+- Validate icon scaling and preserve local generation when App Store lookup fails.
+- Report extended-attribute failures instead of silently treating them as missing.
+- Clean up temporary comparison icons after interactive previews.
+
 ## [2.2.0](https://github.com/zeldrisho/iconsur/releases/tag/v2.2.0) - 2026-08-08
 
 ### Bug Fixes
