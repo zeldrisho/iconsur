@@ -2,9 +2,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vite-plus/test";
-import { buildProgram } from "../src/cli.ts";
+import { buildProgram, expandDirs } from "../src/cli.ts";
 import { Jimp } from "../src/jimp.ts";
 import { isAppBundle, resolveIdentity } from "../src/icon.ts";
+import { setFileiconCommandRunner } from "../src/fileicon.ts";
 
 /** Creates a fresh temp directory for one test. */
 function tempDir(): string {
@@ -15,8 +16,38 @@ function tempDir(): string {
 function makeAppDir(dir: string, name: string): string {
   const appDir = path.join(dir, `${name}.app`);
   fs.mkdirSync(path.join(appDir, "Contents"), { recursive: true });
+
   return appDir;
 }
+
+describe("native glob expansion", () => {
+  it("matches app directories for absolute and relative patterns", () => {
+    const dir = tempDir();
+    const first = makeAppDir(dir, "Alpha");
+    const second = makeAppDir(dir, "With Spaces");
+    fs.writeFileSync(path.join(dir, "not-an-app.txt"), "not a directory");
+
+    expect(expandDirs(path.join(dir, "*.app"), []).sort()).toEqual([first, second].sort());
+    const previousCwd = process.cwd();
+    process.chdir(dir);
+
+    try {
+      expect(expandDirs("*.app", []).sort()).toEqual(["Alpha.app", "With Spaces.app"]);
+    } finally {
+      process.chdir(previousCwd);
+    }
+
+    expect(expandDirs(path.join(dir, "missing*.app"), [])).toEqual([]);
+  });
+
+  it("matches unicode, parentheses, and brackets in app directory names", () => {
+    const dir = tempDir();
+    const names = ["日本語.app", "Tool (Beta) [Intel].app"];
+    const expected = names.map((name) => makeAppDir(dir, name));
+
+    expect(expandDirs(path.join(dir, "*.app"), []).sort()).toEqual(expected.sort());
+  });
+});
 
 describe("CLI arg parsing (commander)", () => {
   it("parses global options and generates an icon from a custom input", async () => {
@@ -28,14 +59,27 @@ describe("CLI arg parsing (commander)", () => {
     );
     const outPath = path.join(dir, "out.png");
 
-    const program = buildProgram("9.9.9");
-    await program.parseAsync(
-      ["set", appDir, "-l", "-i", srcPath, "-s", "0.8", "-c", "87cdf0", "-o", outPath],
-      {
-        from: "user",
-      },
-    );
+    const calls: string[][] = [];
 
+    const previous = setFileiconCommandRunner((args) => {
+      calls.push(args);
+
+      return { status: 0, stdout: "", stderr: "" };
+    });
+
+    try {
+      const program = buildProgram("9.9.9");
+      await program.parseAsync(
+        ["set", appDir, "-l", "-i", srcPath, "-s", "0.8", "-c", "87cdf0", "-o", outPath],
+        {
+          from: "user",
+        },
+      );
+    } finally {
+      setFileiconCommandRunner(previous);
+    }
+
+    expect(calls).toEqual([]);
     const out = await Jimp.read(outPath);
     expect(out.width).toBe(1024);
     expect(out.height).toBe(1024);

@@ -1,7 +1,7 @@
 {
   "name": "@zeldrisho/iconsur",
-  "version": "2.2.0",
-  "description": "Generate macOS Big Sur styled adaptive icons for third-party apps",
+  "version": "2.2.1",
+  "description": "macOS Big Sur-style adaptive icons for third-party apps",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -11,8 +11,8 @@
     "iconsur": "dist/index.cjs"
   },
   "files": [
-    "src",
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "type": "module",
   "scripts": {
@@ -24,23 +24,22 @@
   "dependencies": {
     "@jimp/core": "^1.6.1",
     "commander": "^15.0.0",
-    "glob": "^13.0.6",
     "icns-lib": "^1.0.1",
     "jimp": "^1.6.1",
     "plist": "^5.0.0"
   },
   "devDependencies": {
+    "@oxlint/plugins": "1.79.0",
     "@types/node": "^24.0.0",
     "@yao-pkg/pkg": "^6.22.0",
-    "git-cliff": "^2.13.1",
-    "tsdown": "^0.22.14",
     "typescript": "^7.0.2",
-    "vite-plus": "^0.2.8"
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
   },
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
-      "version": "11.20.0",
+      "version": "12.4.1",
       "onFail": "download"
     },
     "runtime": {

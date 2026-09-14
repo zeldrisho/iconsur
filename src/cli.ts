@@ -1,6 +1,6 @@
 // Commander CLI surface: `set`, `unset`, `cache`.
+import fs from "node:fs";
 import { Command } from "commander";
-import { globSync } from "glob";
 import { clearIconCache } from "./cache.ts";
 import { removeCustomIcon, runWithEscalation } from "./fileicon.ts";
 import { processApp } from "./icon.ts";
@@ -19,10 +19,11 @@ export interface CliOptions {
 }
 
 /** Expands a glob when it is the only argument; otherwise returns the args. */
-function expandDirs(dir: string, otherDirs: string[]): string[] {
+export function expandDirs(dir: string, otherDirs: string[]): string[] {
   if (!otherDirs.length && dir.includes("*")) {
-    return globSync(dir);
+    return fs.globSync(dir).filter((candidate) => fs.statSync(candidate).isDirectory());
   }
+
   return [dir, ...otherDirs];
 }
 
@@ -45,6 +46,7 @@ export function buildProgram(version: string): Command {
 
   program.command("set <dir> [otherDirs...]").action(async (dir: string, otherDirs: string[]) => {
     const opts = program.opts<CliOptions>();
+
     for (const appDir of expandDirs(dir, otherDirs)) {
       await processApp(appDir, {
         local: opts.local ?? false,

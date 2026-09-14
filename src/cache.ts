@@ -11,6 +11,26 @@
 //   Finder suffices to refresh icons.
 import { spawnSync } from "node:child_process";
 
+/** Injectable native command result used by cache tests. */
+export interface CacheCommandResult {
+  status: number | null;
+}
+
+/** Runs a cache command through the default synchronous subprocess adapter. */
+let commandRunner = (args: string[]): CacheCommandResult => ({
+  status: spawnSync(args[0], args.slice(1), { stdio: "ignore" }).status,
+});
+
+/** Installs a command runner and returns the previous one. */
+export function setCacheCommandRunner(
+  runner: (args: string[]) => CacheCommandResult,
+): (args: string[]) => CacheCommandResult {
+  const previous = commandRunner;
+  commandRunner = runner;
+
+  return previous;
+}
+
 /** Per-user icon caches; user-owned, deletable without elevation. */
 export const PER_USER_CACHE_FIND = [
   "/private/var/folders/",
@@ -27,13 +47,14 @@ export const PER_USER_CACHE_FIND = [
   "{}",
   ";",
 ];
+
 /** System-wide IconServices store; only removed via `cache --system`. */
 export const SYSTEM_ICON_SERVICES_STORE = "/Library/Caches/com.apple.iconservices.store";
 
 /** Runs a command with constant argv; a failed step is non-fatal. */
 function run(args: string[]): void {
   try {
-    spawnSync(args[0], args.slice(1), { stdio: "ignore" });
+    commandRunner(args);
   } catch {
     // A failed cache-clearing step is non-fatal: Dock/Finder restart is the
     // part that actually refreshes icons.
@@ -55,7 +76,8 @@ export function clearIconCache(options: { system?: boolean } = {}): void {
     } else {
       // Non-interactive (CI/scripts): only nuke with passwordless sudo; never
       // hang on a prompt.
-      const probe = spawnSync("sudo", ["-n", "true"], { stdio: "ignore" });
+      const probe = commandRunner(["sudo", "-n", "true"]);
+
       if (probe.status === 0) {
         run(["sudo", "rm", "-rf", SYSTEM_ICON_SERVICES_STORE]);
       } else {

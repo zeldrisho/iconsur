@@ -9,10 +9,12 @@ import { Jimp } from "../src/jimp.ts";
 /** Chunks a buffer into 128-byte literal RLE runs (valid Apple RLE). */
 function literalRle(data: Buffer): Buffer {
   const out: number[] = [];
+
   for (let i = 0; i < data.length; i += 128) {
     const chunk = data.subarray(i, Math.min(i + 128, data.length));
     out.push(chunk.length - 1, ...chunk);
   }
+
   return Buffer.from(out);
 }
 
@@ -23,12 +25,14 @@ function buildIcns(chunks: Record<string, Buffer>): Buffer {
   out.write("icns", 0, "ascii");
   out.writeUInt32BE(size, 4);
   let o = 8;
+
   for (const [type, data] of Object.entries(chunks)) {
     out.write(type, o, "ascii");
     out.writeUInt32BE(8 + data.length, o + 4);
     data.copy(out, o + 8);
     o += 8 + data.length;
   }
+
   return out;
 }
 
@@ -36,6 +40,7 @@ function buildIcns(chunks: Record<string, Buffer>): Buffer {
 function rgbPattern(width: number, height: number): Buffer {
   const rgb = Buffer.alloc(width * height * 3);
   const planeSize = width * height;
+
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const p = y * width + x;
@@ -44,6 +49,7 @@ function rgbPattern(width: number, height: number): Buffer {
       rgb[planeSize * 2 + p] = (x ^ y) & 0xff;
     }
   }
+
   return rgb;
 }
 
@@ -51,9 +57,11 @@ function rgbPattern(width: number, height: number): Buffer {
 function legacy16Icns(): Buffer {
   const rgb = literalRle(rgbPattern(16, 16));
   const mask = Buffer.alloc(256);
+
   for (let i = 0; i < 256; i++) {
     mask[i] = i; // alpha ramp: corner pixels transparent
   }
+
   return buildIcns({ is32: rgb, s8mk: mask });
 }
 
@@ -72,6 +80,15 @@ describe("Apple RLE decompression", () => {
   it("round-trips a literal-encoded RGB stream", () => {
     const source = rgbPattern(16, 16);
     expect(decodeAppleRle(literalRle(source))).toEqual(source);
+  });
+
+  it("rejects output beyond the caller-provided limit", () => {
+    expect(() => decodeAppleRle(Buffer.from([0x82, 0xff]), 4)).toThrow("exceeds");
+  });
+
+  it("rejects truncated runs", () => {
+    expect(() => decodeAppleRle(Buffer.from([0x80]))).toThrow("Truncated");
+    expect(() => decodeAppleRle(Buffer.from([0x02, 0xaa]))).toThrow("Truncated");
   });
 
   it("handles maximum 130-byte repeat run (0xff, value)", () => {
@@ -99,12 +116,14 @@ describe("legacy ICNS decoding", () => {
     const rgb16 = literalRle(rgbPattern(16, 16));
     const rgb32 = literalRle(rgbPattern(32, 32));
     const mask32 = Buffer.alloc(1024, 0xff);
+
     const icns = buildIcns({
       is32: rgb16,
       s8mk: Buffer.alloc(256, 0xff),
       il32: rgb32,
       l8mk: mask32,
     });
+
     const image = legacyIcnsImage(icns);
     expect(image?.width).toBe(32);
     expect(image?.data.length).toBe(32 * 32 * 4);
@@ -130,6 +149,11 @@ describe("legacy ICNS decoding", () => {
 
   it("returns null for non-ICNS buffers", () => {
     expect(legacyIcnsImage(Buffer.from("not an icns file at all"))).toBeNull();
+  });
+
+  it("rejects ICNS with truncated RLE payloads", () => {
+    const icns = buildIcns({ is32: Buffer.from([0x80]), s8mk: Buffer.alloc(256, 0xff) });
+    expect(legacyIcnsImage(icns)).toBeNull();
   });
 
   it("rejects ICNS with invalid chunk sizes", () => {

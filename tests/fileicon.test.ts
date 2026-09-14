@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vite-plus/test";
-import { clearCustomIconFlag, SET_ICON_SCRIPT } from "../src/fileicon.ts";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import {
+  clearCustomIconFlag,
+  runWithEscalation,
+  setCustomIcon,
+  setFileiconCommandRunner,
+  SET_ICON_SCRIPT,
+} from "../src/fileicon.ts";
 
 describe("fileicon osascript argv construction", () => {
   it("keeps the AppleScript program constant and passes paths as argv", () => {
@@ -20,6 +29,73 @@ describe("fileicon osascript argv construction", () => {
     expect(args).toEqual(["osascript", "-e", SET_ICON_SCRIPT, "--", iconPath, destPath]);
     expect(SET_ICON_SCRIPT).not.toContain(iconPath);
     expect(SET_ICON_SCRIPT).not.toContain(destPath);
+  });
+});
+
+describe("native fileicon operations", () => {
+  it("passes hostile paths as argv and verifies the resulting icon", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "iconsur-fileicon-"));
+    const target = path.join(root, "App 'quoted' [x].app");
+    const icon = path.join(root, "icon with spaces.png");
+    fs.mkdirSync(target, { recursive: true });
+    fs.writeFileSync(path.join(target, "Icon\r"), "icns");
+    fs.writeFileSync(icon, "png");
+    const calls: string[][] = [];
+
+    const previous = setFileiconCommandRunner((args) => {
+      calls.push(args);
+
+      if (args[0] === "xattr" && args[1] === "-px") {
+        return {
+          status: 0,
+          stdout:
+            args[2] === "com.apple.ResourceFork"
+              ? Buffer.from("icns", "ascii").toString("hex")
+              : "00000000000000000400000000000000",
+          stderr: "",
+        };
+      }
+
+      return { status: 0, stdout: "", stderr: "" };
+    });
+
+    try {
+      setCustomIcon(target, icon);
+    } finally {
+      setFileiconCommandRunner(previous);
+    }
+
+    expect(calls[0]).toEqual(["osascript", "-e", SET_ICON_SCRIPT, "--", icon, target]);
+  });
+
+  it("uses sudo for a target that is not writable", () => {
+    let elevated = false;
+    runWithEscalation(
+      "/path/that/does/not/exist",
+      (options) => {
+        elevated = options.sudo === true;
+      },
+      "Testing",
+    );
+    expect(elevated).toBe(true);
+  });
+
+  it("surfaces osascript failures", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "iconsur-fileicon-"));
+    const icon = path.join(root, "icon.png");
+    fs.writeFileSync(icon, "png");
+
+    const previous = setFileiconCommandRunner(() => ({
+      status: 17,
+      stdout: "",
+      stderr: "bad image",
+    }));
+
+    try {
+      expect(() => setCustomIcon(path.join(root, "target"), icon)).toThrow("status 17");
+    } finally {
+      setFileiconCommandRunner(previous);
+    }
   });
 });
 

@@ -51,31 +51,58 @@ export interface FileiconOptions {
 
 /** Hidden helper file holding a folder's custom icon (with its resource fork). */
 const FOLDER_CUSTOM_ICON = "Icon\r";
+
 /** FinderInfo attribute carrying the custom-icon flag (folder and file). */
 const FINDER_INFO_ATTRIB = "com.apple.FinderInfo";
+
 /** Resource fork attribute holding the icon payload for file targets. */
 const RESOURCE_FORK_ATTRIB = "com.apple.ResourceFork";
+
 /** Byte offset (0-based) of the flags byte inside the 32-byte FinderInfo struct. */
 const CUSTOM_ICON_BYTE_OFFSET = 8;
+
 /** The `custom icon` flag bit in that byte. */
 const CUSTOM_ICON_FLAG = 0x04;
+
 /** Lowercase 'icns' magic found inside an icon-bearing resource fork. */
 const ICNS_RESOURCE_MAGIC = "icns";
 
-/** Runs a constant-argv command, optionally under sudo. */
-function run(
-  args: string[],
-  opts: FileiconOptions = {},
-): { status: number | null; stdout: string; stderr: string } {
-  const fullArgs = opts.sudo ? ["sudo", ...args] : args;
-  const res = spawnSync(fullArgs[0], fullArgs.slice(1), { encoding: "utf8" });
+/** Result of a native command invocation. */
+export interface FileiconCommandResult {
+  status: number | null;
+  stdout: string;
+  stderr: string;
+}
+
+/** Injectable only to make native command decisions testable without macOS. */
+let commandRunner = (args: string[]): FileiconCommandResult => {
+  const res = spawnSync(args[0], args.slice(1), { encoding: "utf8" });
+
   return { status: res.status, stdout: res.stdout ?? "", stderr: res.stderr ?? "" };
+};
+
+/** Installs a command runner and returns the previous one. */
+export function setFileiconCommandRunner(
+  runner: (args: string[]) => FileiconCommandResult,
+): (args: string[]) => FileiconCommandResult {
+  const previous = commandRunner;
+  commandRunner = runner;
+
+  return previous;
+}
+
+/** Runs a constant-argv command, optionally under sudo. */
+function run(args: string[], opts: FileiconOptions = {}): FileiconCommandResult {
+  const fullArgs = opts.sudo ? ["sudo", ...args] : args;
+
+  return commandRunner(fullArgs);
 }
 
 /** True when the current user can write to the target (no elevation needed). */
 export function isWritable(target: string): boolean {
   try {
     fs.accessSync(target, fs.constants.W_OK);
+
     return true;
   } catch {
     return false;
@@ -94,8 +121,10 @@ export function runWithEscalation(
 ): void {
   if (isWritable(target)) {
     op({});
+
     return;
   }
+
   console.log(
     `${description} ${target} requires write access to the app bundle; retrying with sudo...`,
   );
@@ -105,33 +134,57 @@ export function runWithEscalation(
 /** Reads an extended attribute as a hex string, or null when absent/unreadable. */
 function readXattr(target: string, name: string, opts: FileiconOptions = {}): string | null {
   const res = run(["xattr", "-px", name, target], opts);
+
+  if (res.status === null) {
+    throw new Error(`Failed to execute xattr while reading '${name}' from ${target}`);
+  }
+
   if (res.status !== 0) {
+    // xattr uses a non-zero status for both an absent attribute and genuine
+    // I/O/permission failures. Only documented absence messages are benign.
+    if (/no such xattr|attribute not found/i.test(res.stderr)) {
+      return null;
+    }
+
+    if (res.stderr.trim() !== "") {
+      throw new Error(
+        `Failed to read '${name}' from ${target} (xattr exited with status ${res.status}: ${res.stderr.trim()})`,
+      );
+    }
+
     return null;
   }
+
   return res.stdout.replace(/\s/g, "");
 }
 
 /** Clears the custom-icon flag in a FinderInfo hex string; null when fully blank. */
 export function clearCustomIconFlag(hex: string): string | null {
   const flagEnd = (CUSTOM_ICON_BYTE_OFFSET + 1) * 2;
+
   if (hex.length < flagEnd) {
     return hex;
   }
+
   const byte = parseInt(hex.slice(CUSTOM_ICON_BYTE_OFFSET * 2, flagEnd), 16);
   const patched = byte & ~CUSTOM_ICON_FLAG & 0xff;
+
   const out =
     hex.slice(0, CUSTOM_ICON_BYTE_OFFSET * 2) +
     patched.toString(16).padStart(2, "0").toUpperCase() +
     hex.slice(flagEnd);
+
   return /^0+$/.test(out) ? null : out;
 }
 
 /** True when the target's FinderInfo has the custom-icon flag set. */
 function hasCustomIconFlag(target: string, opts: FileiconOptions = {}): boolean {
   const hex = readXattr(target, FINDER_INFO_ATTRIB, opts);
+
   if (hex === null || hex.length < (CUSTOM_ICON_BYTE_OFFSET + 1) * 2) {
     return false;
   }
+
   return (
     (parseInt(hex.slice(CUSTOM_ICON_BYTE_OFFSET * 2, (CUSTOM_ICON_BYTE_OFFSET + 1) * 2), 16) &
       CUSTOM_ICON_FLAG) !==
@@ -143,31 +196,37 @@ function hasCustomIconFlag(target: string, opts: FileiconOptions = {}): boolean 
  * True when actual icon payload exists: for a folder, the `Icon\r` helper
  * file with an icns resource in its fork; for a file, its own resource fork.
  */
-function hasIconData(target: string, _opts: FileiconOptions = {}): boolean {
+function hasIconData(target: string, opts: FileiconOptions = {}): boolean {
   const stat = fs.statSync(target, { throwIfNoEntry: false });
   const helper = stat?.isDirectory() ? path.join(target, FOLDER_CUSTOM_ICON) : target;
+
   if (!fs.existsSync(helper)) {
     return false;
   }
-  try {
-    const fork = fs.readFileSync(`${helper}/..namedfork/rsrc`);
-    return fork.includes(Buffer.from(ICNS_RESOURCE_MAGIC, "ascii"));
-  } catch {
-    return false;
-  }
+
+  const resourceFork = readXattr(helper, RESOURCE_FORK_ATTRIB, opts);
+
+  return (
+    resourceFork !== null &&
+    Buffer.from(resourceFork, "hex").includes(Buffer.from(ICNS_RESOURCE_MAGIC, "ascii"))
+  );
 }
 
 /** Snapshot of the target's custom-icon flag and payload presence. */
-function customIconState(
-  target: string,
-  opts: FileiconOptions = {},
-): { flag: boolean; hasData: boolean } {
+interface CustomIconState {
+  flag: boolean;
+  hasData: boolean;
+}
+
+/** Reads both pieces of state required to recognize a valid custom icon. */
+function customIconState(target: string, opts: FileiconOptions = {}): CustomIconState {
   return { flag: hasCustomIconFlag(target, opts), hasData: hasIconData(target, opts) };
 }
 
 /** True when the target currently has a custom icon (flag + payload). */
 export function hasCustomIcon(target: string, opts: FileiconOptions = {}): boolean {
   const state = customIconState(target, opts);
+
   return state.flag && state.hasData;
 }
 
@@ -183,21 +242,26 @@ export function setCustomIcon(
   if (!fs.existsSync(iconPath)) {
     throw new Error(`Image file not found: ${iconPath}`);
   }
+
   const res = run(["osascript", "-e", SET_ICON_SCRIPT, "--", iconPath, destPath], opts);
+
   if (res.status !== 0) {
     throw new Error(
       `osascript exited with status ${res.status}: ${res.stderr.trim() || "unknown error"}`,
     );
   }
+
   // NSWorkspace setIcon reports success even for corrupt images; verify like
   // upstream v0.3.5's testForCustomIcon.
   const state = customIconState(destPath, opts);
+
   if (!state.flag) {
     throw new Error(
       `Failed to set the custom-icon flag in '${FINDER_INFO_ATTRIB}' of ${destPath}. ` +
         "Typically the target is on a volume that does not support custom icons; re-run with unset to clean up.",
     );
   }
+
   if (!state.hasData) {
     throw new Error(
       `Custom-icon flag was set for ${destPath} but no icon data was found; re-run with unset to clean up.`,
@@ -213,6 +277,7 @@ export function setCustomIcon(
  */
 export function removeCustomIcon(destPath: string, opts: FileiconOptions = {}): void {
   const stat = fs.statSync(destPath, { throwIfNoEntry: false });
+
   if (!stat) {
     throw new Error(`Target not found: ${destPath}`);
   }
@@ -220,11 +285,14 @@ export function removeCustomIcon(destPath: string, opts: FileiconOptions = {}): 
   // Step 1: clear the custom-icon flag in com.apple.FinderInfo.
   // An already-absent attribute (readXattr -> null) counts as success.
   const hex = readXattr(destPath, FINDER_INFO_ATTRIB, opts);
+
   if (hex !== null) {
     const patched = clearCustomIconFlag(hex);
+
     if (patched === null) {
       // All bytes cleared -> drop the attribute entirely.
       const res = run(["xattr", "-d", FINDER_INFO_ATTRIB, destPath], opts);
+
       if (res.status !== 0) {
         throw new Error(
           `Failed to remove '${FINDER_INFO_ATTRIB}' from ${destPath} ` +
@@ -233,6 +301,7 @@ export function removeCustomIcon(destPath: string, opts: FileiconOptions = {}): 
       }
     } else if (patched !== hex) {
       const res = run(["xattr", "-wx", FINDER_INFO_ATTRIB, patched, destPath], opts);
+
       if (res.status !== 0) {
         throw new Error(
           `Failed to clear the custom-icon flag in '${FINDER_INFO_ATTRIB}' of ${destPath} ` +
@@ -246,6 +315,7 @@ export function removeCustomIcon(destPath: string, opts: FileiconOptions = {}): 
   // or the resource fork for plain files.
   if (stat.isDirectory()) {
     const res = run(["rm", "-f", path.join(destPath, FOLDER_CUSTOM_ICON)], opts);
+
     if (res.status !== 0) {
       throw new Error(
         `Failed to remove '${FOLDER_CUSTOM_ICON}' from ${destPath} ` +
@@ -254,6 +324,7 @@ export function removeCustomIcon(destPath: string, opts: FileiconOptions = {}): 
     }
   } else if (hasIconData(destPath, opts)) {
     const res = run(["xattr", "-d", RESOURCE_FORK_ATTRIB, destPath], opts);
+
     if (res.status !== 0) {
       throw new Error(
         `Failed to remove '${RESOURCE_FORK_ATTRIB}' from ${destPath} ` +

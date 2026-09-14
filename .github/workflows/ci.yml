@@ -15,9 +15,9 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Set up Vite+ (vp)
-        uses: voidzero-dev/setup-vp@v1.17.0
+        uses: voidzero-dev/setup-vp@9fd26ff49f9b5e6276c2b493da4454ad4527f7f4 # v1.20.0
         with:
           node-version: "24"
           cache: true
@@ -39,3 +39,7 @@ jobs:
             *) echo "unexpected runner arch"; exit 1 ;;
           esac
           "$BIN" --version
+          TEST_APP="$RUNNER_TEMP/Smoke.app"
+          mkdir -p "$TEST_APP/Contents"
+          "$BIN" -l -i src/mask.png -o "$RUNNER_TEMP/smoke.png" set "$TEST_APP"
+          test -s "$RUNNER_TEMP/smoke.png"

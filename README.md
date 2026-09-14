@@ -2,120 +2,70 @@
 
 # IconSur: macOS Big Sur Adaptive Icon Generator
 
-<a href="https://www.npmjs.com/package/@zeldrisho/iconsur"><img alt="npm version" title="npm version" src="https://badgen.net/npm/v/@zeldrisho/iconsur" ></a>
-<a href="https://www.npmjs.com/package/@zeldrisho/iconsur"><img alt="npm downloads" title="npm downloads" src="https://badgen.net/npm/dt/@zeldrisho/iconsur" ></a>
-<a href="https://github.com/zeldrisho/iconsur/commit"><img alt="GitHub last commit" title="github commits" src="https://badgen.net/github/last-commit/zeldrisho/iconsur" ></a>
-
-</p>
+<a href="https://www.npmjs.com/package/@zeldrisho/iconsur"><img alt="npm version" src="https://badgen.net/npm/v/@zeldrisho/iconsur"></a>
+<a href="https://www.npmjs.com/package/@zeldrisho/iconsur"><img alt="npm downloads" src="https://badgen.net/npm/dt/@zeldrisho/iconsur"></a>
 
 </span>
 
-`iconsur` is a command line tool to easily generate macOS Big Sur styled adaptive icons for third-party apps.
+`iconsur` generates macOS Big Sur-style adaptive icons for third-party apps, using the related iOS App Store artwork when available or a locally composed icon otherwise.
 
-The generation is based on the most related iOS app from the App Store, or, if there isn't one, is created from the original icon, in which case the background color and the scaling can be customized.
+![IconSur preview](https://user-images.githubusercontent.com/5051300/85926574-ebfb9d80-b8d2-11ea-836b-28e38d1f3447.png)
 
-![image](https://user-images.githubusercontent.com/5051300/85926574-ebfb9d80-b8d2-11ea-836b-28e38d1f3447.png)
+> **Fork:** a continuation of the archived [rikumi/iconsur](https://github.com/rikumi/iconsur), published as `@zeldrisho/iconsur`.
 
-> **Fork**: a continuation of the archived [rikumi/iconsur](https://github.com/rikumi/iconsur) (last upstream release `1.7.0`, Apr 2022). This fork publishes as `@zeldrisho/iconsur`.
+## Install
 
-## Installation
+Use without a permanent installation:
 
-Install it easily:
+```sh
+npx @zeldrisho/iconsur@latest set "/Applications/Microsoft Word.app"
+```
 
-### Using npm
+Or install globally:
 
-```shell
+```sh
 npm install -g @zeldrisho/iconsur
 ```
 
-Requires Node.js `>=22.18` (the published npm package ships a prebuilt bundle; running the CLI straight from source uses Node's built-in type stripping).
+Requires Node.js `>=22.18`. Standalone arm64 and x64 binaries are available on the [Releases](https://github.com/zeldrisho/iconsur/releases) page.
 
 ## Usage
 
-Download the `iconsur` binary for macOS (arm64 or x64) from [Releases](https://github.com/zeldrisho/iconsur/releases), `chmod +x` and include it in your PATH.
-
-Start generating your first adaptive app icon:
-
 ```sh
-iconsur set /Applications/Microsoft\ Word.app/
+# Use matching App Store artwork
+iconsur set /Applications/Microsoft\ Word.app
 
-# Update the icon cache and reload Finder & Dock
+# Force local generation, optionally customizing the source, scale, and color
+iconsur set /Applications/Visual\ Studio\ Code.app -l -i /path/to/icon -s 0.8 -c 87cdf0
+
+# Refresh Finder and Dock after applying an icon
 iconsur cache
 
-# Then the new icon will appear, and will last until the App is updated next time.
-```
-
-This will search for the App Store and use the most related iOS app.
-
-By default, the name for the macOS app is used to search for a corresponding iOS app. You can change the keyword by specifying `-k`/`--keyword`.
-
-If your app only has a corresponding iOS app in non-America store, you may like to specify the 2-letter country code with option `-r`/`--region`.
-
-```sh
-iconsur set /Applications/QQMusic.app/ -r cn
+# Restore an app's original icon
+iconsur unset /Applications/Visual\ Studio\ Code.app
 iconsur cache
 ```
 
-For apps that do not have a corresponding iOS app, an irrelevant app can be found. In these cases, you may need to specify the `-l`/`--local` option to forcibly generate an icon locally:
+Options:
 
-```sh
-iconsur set /Applications/Visual\ Studio\ Code.app/ -l
-iconsur cache
-```
+- `-k, --keyword` changes the App Store search term.
+- `-r, --region` selects a two-letter App Store region, such as `cn`.
+- `-l, --local` skips the App Store and generates locally.
+- `-i, --input` supplies a custom source icon.
+- `-s, --scale` and `-c, --color` customize locally generated icons.
+- `-o, --output` writes a PNG without modifying the app bundle.
 
-You can also use your own original icon with the `-i`/`--input` option. Here IconSur plays the part of adding the background, masking the icon into continuous corners, and adding correct paddings around the masked icon.
+Without `-o`, `set` previews the generated and current icons and asks for confirmation in an interactive terminal. Enter applies the icon; `n` declines. Use `-y`/`--yes` or a non-interactive run to skip confirmation. `unset` restores the original icon.
 
-```sh
-iconsur set /Applications/Visual\ Studio\ Code.app/ -l -i /path/to/your/icon
-iconsur cache
-```
+## Permissions
 
-By default, the original app icon is scaled by 0.9 and is applied to a white background. You may like to change the scaling and background color of the icon. However, if the original icon is opaque, it will not get scaled down in case you specify an original opaque iOS icon from an app developer or a jailbreak icon pack.
+Icons are applied without elevation when the app is writable. For system-owned or protected bundles, `set` and `unset` retry the same operation with `sudo`. `cache` only clears per-user caches; `cache --system` additionally requests permission to remove the system icon cache and skips that removal in non-interactive sessions.
 
-```sh
-iconsur set /Applications/Visual\ Studio\ Code.app/ -l -s 0.8 -c 87cdf0
-iconsur cache
-```
+## Maintainer documentation
 
-To remove the icon previously set for a specific app, use the `unset` subcommand:
-
-```sh
-iconsur unset /Applications/Microsoft\ Word.app/
-iconsur unset /Applications/Visual\ Studio\ Code.app/
-iconsur cache
-```
-
-### Preview before applying
-
-When `iconsur set` generates an icon for an app (no `-o`), it shows the preview path, **auto-opens the generated preview and the app's current icon in Preview** so you can see and compare them side by side, and asks for confirmation in an interactive terminal before touching the bundle:
-
-```sh
-$ iconsur set /Applications/Visual\ Studio\ Code.app/ -l
-Generated preview at /var/folders/.../tmp-icon-abc123.png
-Opening the preview and the current icon in Preview for comparison...
-Apply icon to /Applications/Visual Studio Code.app? [Y/n]
-```
-
-Pressing **Enter** applies the new icon (the prompt defaults to `Y`); type `n` to keep the original icon. The generated preview stays on disk when declined. Non-interactive runs (scripts, CI) apply directly, and `-y`/`--yes` skips the prompt. `iconsur unset <app>` restores the original icon at any time.
-
-### Permissions (no blanket `sudo`)
-
-`iconsur` runs **unprivileged by default**:
-
-- Apps you own (e.g. `~/Applications` or most third-party apps in `/Applications`) are set without `sudo`.
-- System-owned, Mac App Store, or SIP-protected bundles require write access to the bundle; `iconsur` detects this and **automatically retries the same operation with `sudo`** (one password prompt, with an explanatory message).
-- `iconsur cache` clears your **per-user** icon caches and restarts Dock/Finder — no elevation, ever.
-- `iconsur cache --system` additionally removes the system-wide `/Library/Caches/com.apple.iconservices.store` (opt-in escalation; skipped with a note in non-interactive sessions so scripts/CI never hang on a prompt).
-
-## Example
-
-See the original author's [personal iconsur setup](https://gist.github.com/rikumi/e2ac39882a7dcd29642f29343da5a54a) as an example.
-
-## Installation channels
-
-- **npm**: `npm install -g @zeldrisho/iconsur` (recommended; requires Node `>=22.18`).
-- **Homebrew**: the upstream `iconsur` formula is deprecated and will be disabled (2027-02-01); a fork tap is not maintained — use npm or the release binary instead.
+- [Architecture and security boundaries](docs/architecture.md)
+- [Development, testing, and releases](docs/development.md)
 
 ## Credits
 
-Thanks to [LiteIcon](https://freemacsoft.net/liteicon/) for the original inspiration, and [fileicon by mklement0](https://github.com/mklement0/fileicon) for the icon-set/remove mechanism.
+Thanks to [LiteIcon](https://freemacsoft.net/liteicon/) for the inspiration and [fileicon](https://github.com/mklement0/fileicon) for the icon-set/remove mechanism.

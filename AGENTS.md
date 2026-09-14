@@ -1,33 +1,38 @@
 # Agent Instructions
 
-## Module layout
+## Toolchain
 
-- `src/`: TS CLI runtime — `index.ts` (entry) plus `cli.ts`, `icon.ts`, `fileicon.ts` (native osascript/xattr icon set/rm), `openjpeg.ts` (vendored Emscripten OpenJPEG), `jimp.ts` (JP2 format registration), `plist.ts`, `cache.ts`, `assets.ts`. Vendored artifacts (`openjpeg.ts`, `mask.png`) are not hand-edited.
-- `.github/workflows/`: `ci.yml` (PR status checks) and `release.yml` (git-cliff release pipeline).
-- `docs/`: maintainer docs.
+- Use Vite+ (`vp`) with pnpm; versions are pinned in `package.json` and `pnpm-workspace.yaml`.
+- Use Vite+'s bundled tools instead of adding standalone lint, formatter, bundler, or test-runner dependencies.
 
 ## Commands
 
-| Task                    | Command                               |
-| ----------------------- | ------------------------------------- |
-| Install dependencies    | `vp install` (pnpm)                   |
-| Run from source         | `node src/index.ts <command>`         |
-| Build standalone binary | `vp run build` (tsdown + pkg)         |
-| Validate / test         | `vp check` / `vp test`                |
-| Release                 | push to `main`; see `docs/release.md` |
+| Task                 | Command                     |
+| -------------------- | --------------------------- |
+| Install              | `vp install`                |
+| Check a file         | `vp check src/cli.ts`       |
+| Test a file          | `vp test tests/cli.test.ts` |
+| Full validation      | `vp check && vp test`       |
+| Build macOS binaries | `vp run build`              |
 
-## Constraints
+- Use `vp run build`, not `vp build`.
+- CI runs on macOS and smoke-tests the native binary.
 
-- Before implementation, run `git fetch --prune`, inspect local and upstream state, and start from the latest target branch without discarding uncommitted work.
-- Delete a completed local branch only when it is merged into its target and its upstream branch is gone.
-- pnpm is the canonical package manager; the stale `package-lock.json` is removed (in `.gitignore`).
-- Write conventional commits; git-cliff drives versioning and `CHANGELOG.md` (see `docs/release.md`). The pre-commit hook (`.vite-hooks/pre-commit`) runs staged checks; opt out with `VP_GIT_HOOKS=0`.
-- Docs-only sessions: never touch code or config; record changes in `docs/plan.md`.
+## Conventions
+
+- Keep tests in `tests/*.test.ts`, importing test APIs from `vite-plus/test`.
+- Preserve asset resolution across source ESM, bundled CJS, and pkg snapshots in `src/assets.ts`.
+- Do not hand-edit vendored `src/openjpeg.ts` or `src/mask.png`.
+- Treat `dist/` as generated build output.
+- Follow `docs/architecture.md` for subprocesses, path handling, and privilege escalation.
+- Keep `CHANGELOG.md` manually curated; release notes are extracted by `scripts/release-notes.ts`.
 
 ## References
 
-- Usage (end users): `README.md`
-- Development: `docs/development.md`
-- Architecture: `docs/architecture.md`
-- Security: `docs/security-invariants.md`
-- Releases: `docs/release.md`
+| Need                      | File                       |
+| ------------------------- | -------------------------- |
+| CLI usage                 | `README.md`                |
+| Architecture and security | `docs/architecture.md`     |
+| Development and releases  | `docs/development.md`      |
+| Checks and packaging      | `vite.config.ts`           |
+| CI smoke test             | `.github/workflows/ci.yml` |
