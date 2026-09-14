@@ -74,6 +74,11 @@ describe("Apple RLE decompression", () => {
     expect(decodeAppleRle(literalRle(source))).toEqual(source);
   });
 
+  it("rejects truncated runs", () => {
+    expect(() => decodeAppleRle(Buffer.from([0x80]))).toThrow("Truncated");
+    expect(() => decodeAppleRle(Buffer.from([0x02, 0xaa]))).toThrow("Truncated");
+  });
+
   it("handles maximum 130-byte repeat run (0xff, value)", () => {
     // 0xff & 0x7f = 127 -> 127 + 3 = 130 copies of 0xaa
     const decoded = decodeAppleRle(Buffer.from([0xff, 0xaa]));
@@ -130,6 +135,11 @@ describe("legacy ICNS decoding", () => {
 
   it("returns null for non-ICNS buffers", () => {
     expect(legacyIcnsImage(Buffer.from("not an icns file at all"))).toBeNull();
+  });
+
+  it("rejects ICNS with truncated RLE payloads", () => {
+    const icns = buildIcns({ is32: Buffer.from([0x80]), s8mk: Buffer.alloc(256, 0xff) });
+    expect(legacyIcnsImage(icns)).toBeNull();
   });
 
   it("rejects ICNS with invalid chunk sizes", () => {

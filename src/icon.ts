@@ -179,11 +179,17 @@ export function decodeAppleRle(data: Buffer): Buffer {
     const b = data[i];
     if (b & 0x80) {
       const count = (b & 0x7f) + 3;
+      if (i + 1 >= data.length) {
+        throw new Error("Truncated Apple RLE repeat run");
+      }
       out.fill(data[i + 1], o, o + count);
       o += count;
       i += 2;
     } else {
       const count = b + 1;
+      if (i + 1 + count > data.length) {
+        throw new Error("Truncated Apple RLE literal run");
+      }
       data.copy(out, o, i + 1, i + 1 + count);
       o += count;
       i += 1 + count;
@@ -228,7 +234,12 @@ export function legacyIcnsImage(iconBuffer: Buffer): { width: number; data: Buff
       if (!candidate) {
         continue;
       }
-      const rgb = decodeAppleRle(candidate);
+      let rgb: Buffer;
+      try {
+        rgb = decodeAppleRle(candidate);
+      } catch {
+        continue;
+      }
       if (rgb.length !== expected) {
         continue;
       }
@@ -295,12 +306,16 @@ export function resolveIdentity(appDir: string, opts: IconOptions): AppIdentity 
   return { name: appName, iconPath: srcIconFile };
 }
 
-async function searchAppStore(appName: string, region: string): Promise<JimpInstance | null> {
+export async function searchAppStore(
+  appName: string,
+  region: string,
+  fetcher: typeof fetch = fetch,
+): Promise<JimpInstance | null> {
   console.log(`Searching iOS App with name: ${appName}`);
   const url =
     `https://itunes.apple.com/search?media=software&entity=software%2CiPadSoftware` +
     `&term=${encodeURIComponent(appName)}&country=${region}&limit=1`;
-  const res = await fetch(url);
+  const res = await fetcher(url);
   const data = (await res.json()) as {
     results?: Array<{ trackName: string; artworkUrl512?: string; artworkUrl100?: string }>;
   };
@@ -321,7 +336,7 @@ async function searchAppStore(appName: string, region: string): Promise<JimpInst
     );
     return null;
   }
-  const iconRes = await fetch(iconUrl);
+  const iconRes = await fetcher(iconUrl);
   const iconData = Buffer.from(await iconRes.arrayBuffer());
   return (await Jimp.read(iconData)).resize({ w: ICON_SIZE, h: ICON_SIZE });
 }

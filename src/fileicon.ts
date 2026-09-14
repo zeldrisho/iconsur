@@ -62,14 +62,32 @@ const CUSTOM_ICON_FLAG = 0x04;
 /** Lowercase 'icns' magic found inside an icon-bearing resource fork. */
 const ICNS_RESOURCE_MAGIC = "icns";
 
-/** Runs a constant-argv command, optionally under sudo. */
-function run(
-  args: string[],
-  opts: FileiconOptions = {},
-): { status: number | null; stdout: string; stderr: string } {
-  const fullArgs = opts.sudo ? ["sudo", ...args] : args;
-  const res = spawnSync(fullArgs[0], fullArgs.slice(1), { encoding: "utf8" });
+/** Result of a native command invocation. */
+export interface FileiconCommandResult {
+  status: number | null;
+  stdout: string;
+  stderr: string;
+}
+
+/** Injectable only to make native command decisions testable without macOS. */
+let commandRunner = (args: string[]): FileiconCommandResult => {
+  const res = spawnSync(args[0], args.slice(1), { encoding: "utf8" });
   return { status: res.status, stdout: res.stdout ?? "", stderr: res.stderr ?? "" };
+};
+
+/** Installs a command runner and returns the previous one. */
+export function setFileiconCommandRunner(
+  runner: (args: string[]) => FileiconCommandResult,
+): (args: string[]) => FileiconCommandResult {
+  const previous = commandRunner;
+  commandRunner = runner;
+  return previous;
+}
+
+/** Runs a constant-argv command, optionally under sudo. */
+function run(args: string[], opts: FileiconOptions = {}): FileiconCommandResult {
+  const fullArgs = opts.sudo ? ["sudo", ...args] : args;
+  return commandRunner(fullArgs);
 }
 
 /** True when the current user can write to the target (no elevation needed). */

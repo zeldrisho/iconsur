@@ -5,6 +5,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { buildProgram, expandDirs } from "../src/cli.ts";
 import { Jimp } from "../src/jimp.ts";
 import { isAppBundle, resolveIdentity } from "../src/icon.ts";
+import { setFileiconCommandRunner } from "../src/fileicon.ts";
 
 /** Creates a fresh temp directory for one test. */
 function tempDir(): string {
@@ -55,14 +56,24 @@ describe("CLI arg parsing (commander)", () => {
     );
     const outPath = path.join(dir, "out.png");
 
-    const program = buildProgram("9.9.9");
-    await program.parseAsync(
-      ["set", appDir, "-l", "-i", srcPath, "-s", "0.8", "-c", "87cdf0", "-o", outPath],
-      {
-        from: "user",
-      },
-    );
+    const calls: string[][] = [];
+    const previous = setFileiconCommandRunner((args) => {
+      calls.push(args);
+      return { status: 0, stdout: "", stderr: "" };
+    });
+    try {
+      const program = buildProgram("9.9.9");
+      await program.parseAsync(
+        ["set", appDir, "-l", "-i", srcPath, "-s", "0.8", "-c", "87cdf0", "-o", outPath],
+        {
+          from: "user",
+        },
+      );
+    } finally {
+      setFileiconCommandRunner(previous);
+    }
 
+    expect(calls).toEqual([]);
     const out = await Jimp.read(outPath);
     expect(out.width).toBe(1024);
     expect(out.height).toBe(1024);
