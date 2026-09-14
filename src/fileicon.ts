@@ -196,7 +196,7 @@ function hasCustomIconFlag(target: string, opts: FileiconOptions = {}): boolean 
  * True when actual icon payload exists: for a folder, the `Icon\r` helper
  * file with an icns resource in its fork; for a file, its own resource fork.
  */
-function hasIconData(target: string, _opts: FileiconOptions = {}): boolean {
+function hasIconData(target: string, opts: FileiconOptions = {}): boolean {
   const stat = fs.statSync(target, { throwIfNoEntry: false });
   const helper = stat?.isDirectory() ? path.join(target, FOLDER_CUSTOM_ICON) : target;
 
@@ -204,13 +204,12 @@ function hasIconData(target: string, _opts: FileiconOptions = {}): boolean {
     return false;
   }
 
-  try {
-    const fork = fs.readFileSync(`${helper}/..namedfork/rsrc`);
+  const resourceFork = readXattr(helper, RESOURCE_FORK_ATTRIB, opts);
 
-    return fork.includes(Buffer.from(ICNS_RESOURCE_MAGIC, "ascii"));
-  } catch {
-    return false;
-  }
+  return (
+    resourceFork !== null &&
+    Buffer.from(resourceFork, "hex").includes(Buffer.from(ICNS_RESOURCE_MAGIC, "ascii"))
+  );
 }
 
 /** Snapshot of the target's custom-icon flag and payload presence. */

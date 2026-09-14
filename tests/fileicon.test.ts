@@ -37,9 +37,8 @@ describe("native fileicon operations", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "iconsur-fileicon-"));
     const target = path.join(root, "App 'quoted' [x].app");
     const icon = path.join(root, "icon with spaces.png");
-    const resourceFork = path.join(target, "Icon\r", "..namedfork");
-    fs.mkdirSync(resourceFork, { recursive: true });
-    fs.writeFileSync(path.join(resourceFork, "rsrc"), "icns");
+    fs.mkdirSync(target, { recursive: true });
+    fs.writeFileSync(path.join(target, "Icon\r"), "icns");
     fs.writeFileSync(icon, "png");
     const calls: string[][] = [];
 
@@ -49,7 +48,10 @@ describe("native fileicon operations", () => {
       if (args[0] === "xattr" && args[1] === "-px") {
         return {
           status: 0,
-          stdout: "00000000000000000400000000000000",
+          stdout:
+            args[2] === "com.apple.ResourceFork"
+              ? Buffer.from("icns", "ascii").toString("hex")
+              : "00000000000000000400000000000000",
           stderr: "",
         };
       }
