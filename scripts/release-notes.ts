@@ -9,21 +9,24 @@ if (!version || !/^\d+\.\d+\.\d+$/.test(version)) {
 
 const changelog = fs.readFileSync("CHANGELOG.md", "utf8");
 
-const heading = new RegExp(`^## \\[${version.replaceAll(".", "\\.")}\\].*$`, "m");
+const lines = changelog.split(/\r?\n/);
 
-const match = heading.exec(changelog);
+const headingPrefix = `## [${version}]`;
 
-if (match === null) {
+const headingIndex = lines.findIndex((line) => line.startsWith(headingPrefix));
+
+if (headingIndex < 0) {
   console.error(`No changelog entry found for ${version}`);
   process.exit(1);
 }
 
-const start = match.index;
+const nextHeadingIndex = lines.findIndex(
+  (line, index) => index > headingIndex && line.startsWith("## "),
+);
 
-const next = changelog.slice(start + match[0].length).search(/^## /m);
-
-const section = changelog
-  .slice(start, next < 0 ? undefined : start + match[0].length + next)
+const section = lines
+  .slice(headingIndex, nextHeadingIndex < 0 ? undefined : nextHeadingIndex)
+  .join("\n")
   .trim();
 
 process.stdout.write(section + "\n");
