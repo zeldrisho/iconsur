@@ -1,32 +1,42 @@
 # Agent Instructions
 
-## Module layout
+## Toolchain
 
-- `src/`: TypeScript CLI runtime. `openjpeg.ts` and `mask.png` are vendored artifacts; do not hand-edit them.
-- `tests/`: Vitest tests run through Vite+.
-- `scripts/`: small TypeScript maintenance scripts.
-- `.github/workflows/`: CI and tag-based release workflows.
+- Use Vite+ (`vp`) with pnpm; versions are pinned in `package.json` and `pnpm-workspace.yaml`.
+- Use Vite+'s bundled tools rather than adding standalone lint, formatter, bundler, or test-runner dependencies.
 
 ## Commands
 
-| Task                  | Command                                                            |
-| --------------------- | ------------------------------------------------------------------ |
-| Install               | `vp install`                                                       |
-| Validate              | `vp check`                                                         |
-| Test                  | `vp test`                                                          |
-| Build bundle/binaries | `vp run build`                                                     |
-| Release               | Update `package.json` and `CHANGELOG.md`, then push a `vX.Y.Z` tag |
+| Task                           | Command                     |
+| ------------------------------ | --------------------------- |
+| Install dependencies           | `vp install`                |
+| Check a changed file (example) | `vp check src/cli.ts`       |
+| Run one test file (example)    | `vp test tests/cli.test.ts` |
+| Full validation                | `vp check && vp test`       |
+| Build macOS binaries           | `vp run build`              |
 
-## Conventions
+- File-scoped checks narrow formatting and linting; configured type checking remains project-wide.
+- Use `vp run build`, not `vp build`: this CLI's build is a package script.
+- CI runs on macOS and smoke-tests the native binary.
 
-- Use pnpm/Vite+; do not add standalone lint, formatter, bundler, or test-runner dependencies when Vite+ provides them.
-- Keep user-supplied paths out of shell or AppleScript source; pass them as argv.
-- Keep `CHANGELOG.md` manually curated using Keep a Changelog and Semantic Versioning.
-- Treat `src/openjpeg.ts` and `src/mask.png` as generated/vendor inputs.
-- The pre-commit hook runs staged checks; set `VP_GIT_HOOKS=0` to opt out.
+## Key Conventions
+
+- Keep tests in `tests/*.test.ts`, importing test APIs from `vite-plus/test`.
+- Preserve asset resolution across source ESM, bundled CJS, and pkg snapshots in `src/assets.ts`.
+- Do not hand-edit vendored `src/openjpeg.ts` or `src/mask.png`; regenerate OpenJPEG when needed.
+- Treat `dist/` as generated build output, not source.
+- Follow `docs/security-invariants.md` when changing subprocesses, path handling, or privilege escalation.
+- Keep `CHANGELOG.md` manually curated; release notes are extracted by `scripts/release-notes.ts`.
 
 ## References
 
-- Usage: `README.md`
-- Security invariants: `docs/security-invariants.md`
-- Release notes extraction: `scripts/release-notes.ts`
+| Need                                       | File                                       |
+| ------------------------------------------ | ------------------------------------------ |
+| CLI installation and usage                 | `README.md`                                |
+| Development tooling and setup              | `docs/vite-plus.md`                        |
+| Security boundaries                        | `docs/security-invariants.md`              |
+| Checks, tests, and packaging configuration | `vite.config.ts`                           |
+| CI platform and binary smoke test          | `.github/workflows/ci.yml`                 |
+| Tag-based release and publication          | `.github/workflows/release.yml`            |
+| Release history and notes                  | `CHANGELOG.md`, `scripts/release-notes.ts` |
+
