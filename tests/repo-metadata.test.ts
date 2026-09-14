@@ -11,6 +11,7 @@ const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"),
   description: string;
   repository: { url: string };
 };
+
 const readme = fs.readFileSync(path.join(process.cwd(), "README.md"), "utf8");
 
 describe("release metadata sync (README / package.json / npm / GitHub)", () => {

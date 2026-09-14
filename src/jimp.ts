@@ -19,9 +19,11 @@ export interface DecodedImage {
 export function planarToInterleaved(data: Buffer): Buffer {
   const rgba = Buffer.alloc(data.length);
   const planeSize = data.length / 4;
+
   for (let i = 0; i < data.length; i++) {
     rgba[i] = data[planeSize * (i % 4) + Math.floor(i / 4)] || 0;
   }
+
   return rgba;
 }
 
@@ -31,6 +33,7 @@ export function planarToInterleaved(data: Buffer): Buffer {
  */
 export function decodeJp2(buffer: Buffer): DecodedImage {
   const { width, height, data } = openjpeg(buffer, "jp2");
+
   return { width, height, data: planarToInterleaved(data) };
 }
 

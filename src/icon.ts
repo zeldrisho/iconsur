@@ -33,8 +33,10 @@ export interface AppIdentity {
 
 /** Final canvas edge length in pixels. */
 const IMAGE_SIZE = 1024;
+
 /** Margin between the canvas edge and the icon box. */
 const ICON_PADDING = 100;
+
 /** Edge length of the centered icon box (canvas minus padding). */
 const ICON_SIZE = IMAGE_SIZE - 2 * ICON_PADDING;
 
@@ -63,6 +65,7 @@ function largestIcnsImage(iconBuffer: Buffer<ArrayBuffer>): Buffer<ArrayBuffer> 
       .filter(([key]) => icns.isImageType(key))
       .map(([, value]) => value)
       .sort((a, b) => b.length - a.length)[0];
+
     return subIconBuffer ?? null;
   } catch {
     return null;
@@ -76,6 +79,7 @@ function largestIcnsImage(iconBuffer: Buffer<ArrayBuffer>): Buffer<ArrayBuffer> 
  */
 export function parseApplyAnswer(input: string): boolean {
   const trimmed = input.trim();
+
   return trimmed === "" || /^y(es)?$/i.test(trimmed);
 }
 
@@ -88,6 +92,7 @@ export function openForComparison(paths: string[]): void {
   if (process.platform !== "darwin" || paths.length === 0) {
     return;
   }
+
   try {
     const child = spawn("open", paths, { detached: true, stdio: "ignore" });
     child.unref();
@@ -108,34 +113,43 @@ export async function extractOldIcon(
   identity: AppIdentity,
 ): Promise<string | null> {
   let image: Buffer | null = null;
+
   try {
     const fork = fs.readFileSync(path.join(appDir, "Icon\r", "..namedfork", "rsrc"));
     image = fork.includes(Buffer.from("icns", "ascii")) ? largestIcnsImage(fork) : null;
   } catch {
     // No custom-icon fork (or unsupported filesystem) — use the bundled icon.
   }
+
   if (image === null && identity.iconPath && fs.existsSync(identity.iconPath)) {
     const data = fs.readFileSync(identity.iconPath);
     image = largestIcnsImage(data) ?? data;
   }
+
   if (image === null) {
     return null;
   }
+
   let oldIcon: JimpInstance | null = null;
+
   try {
     oldIcon = await Jimp.read(image);
   } catch {
     const legacy = legacyIcnsImage(image);
+
     if (legacy) {
       oldIcon = jimpFromRgba(legacy.width, legacy.data);
     }
   }
+
   if (!oldIcon) {
     return null;
   }
+
   try {
     const oldPath = `${tempPath("old-icon")}.png`;
     await oldIcon.write(oldPath as `${string}.${string}`);
+
     return oldPath;
   } catch {
     return null;
@@ -170,31 +184,49 @@ const LEGACY_ICNS_TYPES = [
  * high-bit count byte repeats the next byte (count & 0x7f + 3 times), a
  * low-bit count byte is followed by (count + 1) literal bytes.
  */
-export function decodeAppleRle(data: Buffer): Buffer {
-  // Repeat runs expand at most 65x (2 input bytes -> up to 130 output);
-  // overallocate generously and trim with subarray below.
-  const out = Buffer.alloc(data.length * 65);
+export function decodeAppleRle(
+  data: Buffer,
+  maxOutput = Math.min(data.length * 65, 16 * 1024 * 1024),
+): Buffer {
+  // Repeat runs expand at most 65x (2 input bytes -> up to 130 output).
+  // Callers decoding a known image size pass that exact size to bound memory.
+  const out = Buffer.alloc(maxOutput);
   let o = 0;
+
   for (let i = 0; i < data.length;) {
     const b = data[i];
+
     if (b & 0x80) {
       const count = (b & 0x7f) + 3;
+
       if (i + 1 >= data.length) {
         throw new Error("Truncated Apple RLE repeat run");
       }
+
+      if (o + count > maxOutput) {
+        throw new Error("Apple RLE output exceeds the limit");
+      }
+
       out.fill(data[i + 1], o, o + count);
       o += count;
       i += 2;
     } else {
       const count = b + 1;
+
       if (i + 1 + count > data.length) {
         throw new Error("Truncated Apple RLE literal run");
       }
+
+      if (o + count > maxOutput) {
+        throw new Error("Apple RLE output exceeds the limit");
+      }
+
       data.copy(out, o, i + 1, i + 1 + count);
       o += count;
       i += 1 + count;
     }
   }
+
   return out.subarray(0, o);
 }
 
@@ -208,52 +240,68 @@ export function legacyIcnsImage(iconBuffer: Buffer): { width: number; data: Buff
   if (iconBuffer.length < 8 || iconBuffer.subarray(0, 4).toString("ascii") !== "icns") {
     return null;
   }
+
   const chunks = new Map<string, Buffer>();
   let body = iconBuffer.subarray(8);
+
   while (body.length >= 8) {
     const type = body.subarray(0, 4).toString("ascii");
     const size = body.readUInt32BE(4);
+
     if (size < 8 || size > body.length) {
       return null;
     }
+
     chunks.set(type, body.subarray(8, size));
     body = body.subarray(size);
   }
+
   for (const { size, rgb, mask } of [...LEGACY_ICNS_TYPES].reverse()) {
     const rgbChunk = chunks.get(rgb);
     const maskChunk = chunks.get(mask);
+
     if (!rgbChunk || !maskChunk || maskChunk.length !== size * size) {
       continue;
     }
+
     const expected = size * size * 3;
+
     const candidates =
       rgb === "it32" || rgb === "ih32"
         ? [rgbChunk, rgbChunk.length >= 4 ? rgbChunk.subarray(4) : null]
         : [rgbChunk];
+
     for (const candidate of candidates) {
       if (!candidate) {
         continue;
       }
+
       let rgb: Buffer;
+
       try {
-        rgb = decodeAppleRle(candidate);
+        rgb = decodeAppleRle(candidate, expected);
       } catch {
         continue;
       }
+
       if (rgb.length !== expected) {
         continue;
       }
+
       const rgba = Buffer.alloc(size * size * 4);
       const planeSize = size * size;
+
       for (let p = 0; p < planeSize; p++) {
         rgba[p * 4] = rgb[p];
         rgba[p * 4 + 1] = rgb[planeSize + p];
         rgba[p * 4 + 2] = rgb[planeSize * 2 + p];
         rgba[p * 4 + 3] = maskChunk[p];
       }
+
       return { width: size, data: rgba };
     }
   }
+
   return null;
 }
 
@@ -261,6 +309,7 @@ export function legacyIcnsImage(iconBuffer: Buffer): { width: number; data: Buff
 function jimpFromRgba(width: number, data: Buffer): JimpInstance {
   const image = new Jimp({ width, height: data.length / width / 4 });
   image.bitmap.data.set(data);
+
   return image;
 }
 
@@ -273,6 +322,7 @@ export function resolveIdentity(appDir: string, opts: IconOptions): AppIdentity 
   let srcIconFile = opts.input;
   const infoPlist = path.join(appDir, "Contents/Info.plist");
   const parsed = readInfoPlist(infoPlist);
+
   if (parsed === null) {
     console.log(
       "Plist file might be corrupted; using fallback name and AppIcon.icns as default icon location.",
@@ -287,58 +337,132 @@ export function resolveIdentity(appDir: string, opts: IconOptions): AppIdentity 
         (parsed.CFBundleDisplayName as string | undefined) ||
         path.basename(appDir).replace(/\.app$/, "");
     }
+
     if (!srcIconFile) {
       const iconFile = parsed.CFBundleIconFile as string | undefined;
+
       if (iconFile) {
         srcIconFile = path.resolve(appDir, "Contents/Resources", iconFile);
+
         if (!srcIconFile.endsWith(".icns")) {
           srcIconFile += ".icns";
         }
       }
     }
   }
+
   if (!appName) {
     appName = path.basename(appDir).replace(/\.app$/, "");
   }
+
   if (!srcIconFile) {
     srcIconFile = path.resolve(appDir, "Contents/Resources/AppIcon.icns");
   }
+
   return { name: appName, iconPath: srcIconFile };
+}
+
+type AppStoreFetcher = (url: string) => Promise<Response>;
+
+const APP_STORE_TIMEOUT_MS = 10_000;
+
+const MAX_ARTWORK_BYTES = 10 * 1024 * 1024;
+
+async function fetchAppStore(url: string, fetcher: AppStoreFetcher): Promise<Response> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error("App Store request timed out")),
+      APP_STORE_TIMEOUT_MS,
+    );
+  });
+
+  let response: Response;
+
+  try {
+    response = await Promise.race([fetcher(url), timeout]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+
+  if (!response.ok) {
+    throw new Error(`App Store request failed with HTTP ${response.status}`);
+  }
+
+  return response;
 }
 
 export async function searchAppStore(
   appName: string,
   region: string,
-  fetcher: typeof fetch = fetch,
+  fetcher: AppStoreFetcher = (url) => fetch(url),
 ): Promise<JimpInstance | null> {
   console.log(`Searching iOS App with name: ${appName}`);
-  const url =
-    `https://itunes.apple.com/search?media=software&entity=software%2CiPadSoftware` +
-    `&term=${encodeURIComponent(appName)}&country=${region}&limit=1`;
-  const res = await fetcher(url);
-  const data = (await res.json()) as {
-    results?: Array<{ trackName: string; artworkUrl512?: string; artworkUrl100?: string }>;
-  };
-  const app = data.results?.[0];
-  if (!app) {
-    console.log(`Cannot find iOS App with name: ${appName}`);
-    return null;
-  }
-  const trackName = app.trackName;
-  const iconUrl = app.artworkUrl512 || app.artworkUrl100;
-  console.log(`Found iOS app: ${trackName} with icon: ${iconUrl}`);
-  console.log(
-    "If this app is incorrect, specify the correct name with -k or --keyword, or generate an icon locally with option -l or --local",
-  );
-  if (!iconUrl) {
+
+  try {
+    const url =
+      `https://itunes.apple.com/search?media=software&entity=software%2CiPadSoftware` +
+      `&term=${encodeURIComponent(appName)}&country=${encodeURIComponent(region)}&limit=1`;
+
+    const res = await fetchAppStore(url, fetcher);
+    const data: unknown = await res.json();
+
+    if (!data || typeof data !== "object" || !("results" in data) || !Array.isArray(data.results)) {
+      throw new Error("App Store returned an invalid search response");
+    }
+
+    const app = data.results[0] as
+      | { trackName?: unknown; artworkUrl512?: unknown; artworkUrl100?: unknown }
+      | undefined;
+
+    const iconUrl =
+      typeof app?.artworkUrl512 === "string"
+        ? app.artworkUrl512
+        : typeof app?.artworkUrl100 === "string"
+          ? app.artworkUrl100
+          : undefined;
+
+    if (!app || typeof app.trackName !== "string") {
+      console.log(`Cannot find iOS App with name: ${appName}`);
+
+      return null;
+    }
+
+    console.log(`Found iOS app: ${app.trackName} with icon: ${iconUrl}`);
     console.log(
-      "No artwork URL returned by the App Store search; falling back to local generation.",
+      "If this app is incorrect, specify the correct name with -k or --keyword, or generate an icon locally with option -l or --local",
     );
+
+    if (!iconUrl) {
+      console.log(
+        "No artwork URL returned by the App Store search; falling back to local generation.",
+      );
+
+      return null;
+    }
+
+    const iconRes = await fetchAppStore(iconUrl, fetcher);
+    const contentLength = Number(iconRes.headers.get("content-length"));
+
+    if (Number.isFinite(contentLength) && contentLength > MAX_ARTWORK_BYTES) {
+      throw new Error("App Store artwork exceeds the size limit");
+    }
+
+    const iconData = Buffer.from(await iconRes.arrayBuffer());
+
+    if (iconData.length > MAX_ARTWORK_BYTES) {
+      throw new Error("App Store artwork exceeds the size limit");
+    }
+
+    return (await Jimp.read(iconData)).resize({ w: ICON_SIZE, h: ICON_SIZE });
+  } catch (error) {
+    console.log(
+      `App Store lookup failed; falling back to local generation: ${error instanceof Error ? error.message : String(error)}`,
+    );
+
     return null;
   }
-  const iconRes = await fetcher(iconUrl);
-  const iconData = Buffer.from(await iconRes.arrayBuffer());
-  return (await Jimp.read(iconData)).resize({ w: ICON_SIZE, h: ICON_SIZE });
 }
 
 /**
@@ -347,34 +471,49 @@ export async function searchAppStore(
  */
 async function generateLocalIcon(identity: AppIdentity, opts: IconOptions): Promise<JimpInstance> {
   console.log("Generating adaptive icon...");
+
   if (!fs.existsSync(identity.iconPath)) {
     throw new Error(`Cannot find icon at ${identity.iconPath}`);
   }
 
   let iconBuffer = fs.readFileSync(identity.iconPath);
   const subIconBuffer = largestIcnsImage(iconBuffer);
+
   if (subIconBuffer) {
     iconBuffer = subIconBuffer;
   }
 
   let originalIcon: JimpInstance;
+
   try {
     originalIcon = await Jimp.read(iconBuffer);
   } catch (e) {
     const legacy = legacyIcnsImage(iconBuffer);
+
     if (legacy === null) {
       const message = e instanceof Error ? e.message : String(e);
       throw new Error(
         `Failed to read original icon: ${message}\nRe-run with option -i or --input to use a custom image for generation.`,
       );
     }
+
     console.log(`Decoded legacy ICNS icon (${legacy.width}x${legacy.width})`);
     originalIcon = jimpFromRgba(legacy.width, legacy.data);
   }
 
   let originalIconScaleSize: number;
+
   if (originalIcon.hasAlpha()) {
-    originalIconScaleSize = parseFloat(opts.scale || "0.9");
+    originalIconScaleSize = Number(opts.scale || "0.9");
+
+    if (
+      !Number.isFinite(originalIconScaleSize) ||
+      originalIconScaleSize <= 0 ||
+      originalIconScaleSize > 1
+    ) {
+      throw new Error("Scale must be a number greater than 0 and no greater than 1");
+    }
+
     originalIcon.contain({
       w: ICON_SIZE * originalIconScaleSize,
       h: ICON_SIZE * originalIconScaleSize,
@@ -388,6 +527,7 @@ async function generateLocalIcon(identity: AppIdentity, opts: IconOptions): Prom
   const scalePosition = (ICON_SIZE * (1 - originalIconScaleSize)) / 2;
   const resultIcon = new Jimp({ width: ICON_SIZE, height: ICON_SIZE });
   resultIcon.composite(originalIcon, scalePosition, scalePosition);
+
   return resultIcon;
 }
 
@@ -397,9 +537,11 @@ export async function processApp(appDir: string, opts: IconOptions): Promise<voi
 
   const resolved = path.resolve(process.cwd(), appDir);
   const stat = fs.statSync(resolved, { throwIfNoEntry: false });
+
   if (!stat?.isDirectory()) {
     throw new Error(`${resolved}: No such directory`);
   }
+
   if (!isAppBundle(resolved)) {
     throw new Error(
       `${resolved}: Not an App directory (expected a .app bundle or a directory with Contents/Info.plist)`,
@@ -411,6 +553,7 @@ export async function processApp(appDir: string, opts: IconOptions): Promise<voi
   const mask = (await Jimp.read(resolveAsset("mask.png"))).resize({ w: IMAGE_SIZE, h: IMAGE_SIZE });
 
   let resultIcon: JimpInstance;
+
   if (!opts.local && !opts.input) {
     resultIcon =
       (await searchAppStore(identity.name, region)) ?? (await generateLocalIcon(identity, opts));
@@ -435,6 +578,7 @@ export async function processApp(appDir: string, opts: IconOptions): Promise<voi
     const pngPath = `${tmpFile}.png`;
     await image.write(pngPath as `${string}.${string}`);
     const applied = await applyWithPreview(resolved, identity, pngPath, opts.yes ?? false);
+
     if (applied) {
       fs.rmSync(pngPath, { force: true });
       console.log(`Successfully set icon for ${appDir}\n`);
@@ -459,17 +603,21 @@ async function applyWithPreview(
 ): Promise<boolean> {
   const apply = (): boolean => {
     runWithEscalation(appDir, (o) => setCustomIcon(appDir, previewPath, o), "Setting icon for");
+
     return true;
   };
+
   if (yes || !process.stdin.isTTY) {
     return apply();
   }
+
   // Interactive session: open the new preview next to the current icon so the
   // user can see and compare them before deciding; the prompt defaults to
   // apply (plain Enter accepts).
   const oldIconPath = await extractOldIcon(appDir, identity);
   openForComparison(oldIconPath ? [previewPath, oldIconPath] : [previewPath]);
   const rl = createInterface({ input: process.stdin, output: process.stdout });
+
   try {
     const prompt = [
       `Generated preview at ${previewPath}`,
@@ -478,18 +626,24 @@ async function applyWithPreview(
         : "Opening the preview in Preview for comparison...",
       `Apply icon to ${appDir}? [Y/n] `,
     ].join("\n");
+
     const answer = await new Promise<string>((resolve) => {
       rl.question(prompt, resolve);
     });
+
     if (!parseApplyAnswer(answer)) {
       console.log(`\nIcon not applied. Preview kept at ${previewPath}.`);
       console.log(
         `Re-run the same command to apply it, or revert an applied icon with: iconsur unset ${appDir}`,
       );
+
       return false;
     }
+
     return apply();
   } finally {
     rl.close();
+
+    if (oldIconPath) fs.rmSync(oldIconPath, { force: true });
   }
 }

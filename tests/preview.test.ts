@@ -46,10 +46,12 @@ describe("old-icon extraction for the comparison preview", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "iconsur-test-"));
     const appDir = path.join(dir, "Missing.app");
     fs.mkdirSync(path.join(appDir, "Contents"), { recursive: true });
+
     const oldPath = await extractOldIcon(appDir, {
       name: "Missing",
       iconPath: path.join(appDir, "Contents/Resources/AppIcon.icns"),
     });
+
     expect(oldPath).toBeNull();
   });
 });

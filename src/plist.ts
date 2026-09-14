@@ -23,7 +23,9 @@ export function readInfoPlist(infoPlistPath: string): Record<string, unknown> | 
     // Not a (readable) XML plist -- fall through to `plutil`, which also
     // handles binary plists.
   }
+
   const convertedPlist = tempPath("tmp-plist");
+
   try {
     const res = spawnSync(
       "plutil",
@@ -32,9 +34,11 @@ export function readInfoPlist(infoPlistPath: string): Record<string, unknown> | 
         encoding: "utf8",
       },
     );
+
     if (res.status !== 0) {
       return null;
     }
+
     return parse(fs.readFileSync(convertedPlist, "utf8")) as Record<string, unknown>;
   } catch {
     return null;

@@ -32,8 +32,8 @@ jobs:
         run: |
           vp check
           vp test
-      - name: Build macOS binaries
-        run: vp run build
+      # Publish before building binaries: npm's prepack hook cleans generated
+      # binary artifacts from dist, while the GitHub release uploads them below.
       - name: Publish package
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
@@ -42,6 +42,8 @@ jobs:
           else
             vp pm publish --access public --no-git-checks
           fi
+      - name: Build macOS binaries
+        run: vp run build
       - name: Create GitHub release from CHANGELOG.md
         env:
           GH_TOKEN: ${{ github.token }}

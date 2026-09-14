@@ -23,6 +23,7 @@ export function expandDirs(dir: string, otherDirs: string[]): string[] {
   if (!otherDirs.length && dir.includes("*")) {
     return fs.globSync(dir).filter((candidate) => fs.statSync(candidate).isDirectory());
   }
+
   return [dir, ...otherDirs];
 }
 
@@ -45,6 +46,7 @@ export function buildProgram(version: string): Command {
 
   program.command("set <dir> [otherDirs...]").action(async (dir: string, otherDirs: string[]) => {
     const opts = program.opts<CliOptions>();
+
     for (const appDir of expandDirs(dir, otherDirs)) {
       await processApp(appDir, {
         local: opts.local ?? false,

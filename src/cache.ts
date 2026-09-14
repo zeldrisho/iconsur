@@ -26,6 +26,7 @@ export function setCacheCommandRunner(
 ): (args: string[]) => CacheCommandResult {
   const previous = commandRunner;
   commandRunner = runner;
+
   return previous;
 }
 
@@ -45,6 +46,7 @@ export const PER_USER_CACHE_FIND = [
   "{}",
   ";",
 ];
+
 /** System-wide IconServices store; only removed via `cache --system`. */
 export const SYSTEM_ICON_SERVICES_STORE = "/Library/Caches/com.apple.iconservices.store";
 
@@ -74,6 +76,7 @@ export function clearIconCache(options: { system?: boolean } = {}): void {
       // Non-interactive (CI/scripts): only nuke with passwordless sudo; never
       // hang on a prompt.
       const probe = commandRunner(["sudo", "-n", "true"]);
+
       if (probe.status === 0) {
         run(["sudo", "rm", "-rf", SYSTEM_ICON_SERVICES_STORE]);
       } else {

@@ -16,6 +16,7 @@ function tempDir(): string {
 function makeAppDir(dir: string, name: string): string {
   const appDir = path.join(dir, `${name}.app`);
   fs.mkdirSync(path.join(appDir, "Contents"), { recursive: true });
+
   return appDir;
 }
 
@@ -29,11 +30,13 @@ describe("native glob expansion", () => {
     expect(expandDirs(path.join(dir, "*.app"), []).sort()).toEqual([first, second].sort());
     const previousCwd = process.cwd();
     process.chdir(dir);
+
     try {
       expect(expandDirs("*.app", []).sort()).toEqual(["Alpha.app", "With Spaces.app"]);
     } finally {
       process.chdir(previousCwd);
     }
+
     expect(expandDirs(path.join(dir, "missing*.app"), [])).toEqual([]);
   });
 
@@ -57,10 +60,13 @@ describe("CLI arg parsing (commander)", () => {
     const outPath = path.join(dir, "out.png");
 
     const calls: string[][] = [];
+
     const previous = setFileiconCommandRunner((args) => {
       calls.push(args);
+
       return { status: 0, stdout: "", stderr: "" };
     });
+
     try {
       const program = buildProgram("9.9.9");
       await program.parseAsync(

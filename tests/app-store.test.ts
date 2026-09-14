@@ -6,8 +6,10 @@ describe("App Store search", () => {
   it("URL-encodes the search and uses 512px artwork", async () => {
     const png = await new Jimp({ width: 8, height: 8, color: "#123456" }).getBuffer("image/png");
     const urls: string[] = [];
+
     const result = await searchAppStore("A&B / test", "gb", async (url) => {
       urls.push(url);
+
       if (urls.length === 1) {
         return new Response(
           JSON.stringify({
@@ -21,6 +23,7 @@ describe("App Store search", () => {
           }),
         );
       }
+
       return new Response(png);
     });
 
@@ -31,17 +34,36 @@ describe("App Store search", () => {
     expect(urls[1]).toBe("https://art/512");
   });
 
+  it("falls back on HTTP failures and malformed responses", async () => {
+    const failed = await searchAppStore(
+      "missing",
+      "us",
+      async () => new Response("unavailable", { status: 503 }),
+    );
+
+    const malformed = await searchAppStore(
+      "missing",
+      "us",
+      async () => new Response(JSON.stringify({ unexpected: true })),
+    );
+
+    expect(failed).toBeNull();
+    expect(malformed).toBeNull();
+  });
+
   it("returns null when search has no results or artwork", async () => {
     const noResults = await searchAppStore(
       "missing",
       "us",
       async () => new Response(JSON.stringify({ results: [] })),
     );
+
     const noArtwork = await searchAppStore(
       "missing",
       "us",
       async () => new Response(JSON.stringify({ results: [{ trackName: "No icon" }] })),
     );
+
     expect(noResults).toBeNull();
     expect(noArtwork).toBeNull();
   });

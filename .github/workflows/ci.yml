@@ -39,3 +39,7 @@ jobs:
             *) echo "unexpected runner arch"; exit 1 ;;
           esac
           "$BIN" --version
+          TEST_APP="$RUNNER_TEMP/Smoke.app"
+          mkdir -p "$TEST_APP/Contents"
+          "$BIN" -l -i src/mask.png -o "$RUNNER_TEMP/smoke.png" set "$TEST_APP"
+          test -s "$RUNNER_TEMP/smoke.png"

@@ -13,6 +13,7 @@ const { version } = JSON.parse(fs.readFileSync(resolvePackageJson(), "utf8")) as
 process.on("unhandledRejection", (e) => {
   throw e;
 });
+
 process.on("uncaughtException", (e) => {
   console.error("Error:", e.message);
   process.exit(1);
