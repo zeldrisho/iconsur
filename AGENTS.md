@@ -25,7 +25,7 @@
 - Preserve asset resolution across source ESM, bundled CJS, and pkg snapshots in `src/assets.ts`.
 - Do not hand-edit vendored `src/openjpeg.ts` or `src/mask.png`; regenerate OpenJPEG when needed.
 - Treat `dist/` as generated build output, not source.
-- Follow `docs/security-invariants.md` when changing subprocesses, path handling, or privilege escalation.
+- Follow `docs/architecture.md` when changing subprocesses, path handling, or privilege escalation.
 - Keep `CHANGELOG.md` manually curated; release notes are extracted by `scripts/release-notes.ts`.
 
 ## References
@@ -33,10 +33,9 @@
 | Need                                       | File                                       |
 | ------------------------------------------ | ------------------------------------------ |
 | CLI installation and usage                 | `README.md`                                |
-| Development tooling and setup              | `docs/vite-plus.md`                        |
-| Security boundaries                        | `docs/security-invariants.md`              |
+| Architecture and security boundaries       | `docs/architecture.md`                     |
+| Development tooling and setup              | `docs/development.md`                      |
 | Checks, tests, and packaging configuration | `vite.config.ts`                           |
 | CI platform and binary smoke test          | `.github/workflows/ci.yml`                 |
 | Tag-based release and publication          | `.github/workflows/release.yml`            |
 | Release history and notes                  | `CHANGELOG.md`, `scripts/release-notes.ts` |
-

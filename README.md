@@ -115,6 +115,12 @@ Pressing **Enter** applies the new icon (the prompt defaults to `Y`); type `n` t
 
 See the original author's [personal iconsur setup](https://gist.github.com/rikumi/e2ac39882a7dcd29642f29343da5a54a) as an example.
 
+## Maintainer documentation
+
+- [Architecture and security boundaries](docs/architecture.md)
+- [Development](docs/development.md)
+- [Release process](docs/release.md)
+
 ## Installation channels
 
 - **npx**: `npx @zeldrisho/iconsur@latest` (recommended for occasional use; requires Node `>=22.18`).

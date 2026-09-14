@@ -40,7 +40,7 @@ jobs:
           if pnpm view "@zeldrisho/iconsur@${VERSION}" version >/dev/null 2>&1; then
             echo "${VERSION} is already published; continuing."
           else
-            vp exec pnpm publish --access public --no-git-checks
+            vp pm publish --access public --no-git-checks
           fi
       - name: Create GitHub release from CHANGELOG.md
         env:
