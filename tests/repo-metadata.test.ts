@@ -1,6 +1,6 @@
 // Guards the release-metadata sync: package.json (npmjs), README.md, and the
 // GitHub repo/tags must describe the same package. Keeps `gh`-driven release
-// syncing (see scripts/release-sync.sh and docs/release.md) honest.
+// syncing (see scripts/release-notes.ts) honest.
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vite-plus/test";

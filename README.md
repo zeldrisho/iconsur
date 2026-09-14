@@ -20,9 +20,13 @@ The generation is based on the most related iOS app from the App Store, or, if t
 
 ## Installation
 
-Install it easily:
+Run it without a permanent installation:
 
-### Using npm
+```shell
+npx @zeldrisho/iconsur@latest set "/Applications/Microsoft Word.app"
+```
+
+For repeated use, install it globally instead:
 
 ```shell
 npm install -g @zeldrisho/iconsur
@@ -113,7 +117,8 @@ See the original author's [personal iconsur setup](https://gist.github.com/rikum
 
 ## Installation channels
 
-- **npm**: `npm install -g @zeldrisho/iconsur` (recommended; requires Node `>=22.18`).
+- **npx**: `npx @zeldrisho/iconsur@latest` (recommended for occasional use; requires Node `>=22.18`).
+- **npm**: `npm install -g @zeldrisho/iconsur` (convenient for repeated use).
 - **Homebrew**: the upstream `iconsur` formula is deprecated and will be disabled (2027-02-01); a fork tap is not maintained — use npm or the release binary instead.
 
 ## Credits
