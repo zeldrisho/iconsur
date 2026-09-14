@@ -34,6 +34,10 @@ jobs:
           vp test
       - name: Validate macOS binary build
         run: vp run build
+      - name: Extract release notes
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          node .github/scripts/release-notes.ts "$VERSION" > release-notes.md
       # Publish before building binaries: npm's prepack hook cleans generated
       # binary artifacts from dist, while the GitHub release uploads them below.
       - name: Publish package
@@ -50,8 +54,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          node scripts/release-notes.ts "$VERSION" > release-notes.md
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release edit "$GITHUB_REF_NAME" \
               --title "$GITHUB_REF_NAME" --notes-file release-notes.md

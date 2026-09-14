@@ -3,7 +3,7 @@ import fs from "node:fs";
 const version = process.argv[2];
 
 if (!version || !/^\d+\.\d+\.\d+$/.test(version)) {
-  console.error("Usage: node scripts/release-notes.ts <version>");
+  console.error("Usage: node .github/scripts/release-notes.ts <version>");
   process.exit(2);
 }
 
