@@ -362,13 +362,17 @@ export function resolveIdentity(appDir: string, opts: IconOptions): AppIdentity 
   return { name: appName, iconPath: srcIconFile };
 }
 
-type AppStoreFetcher = (url: string) => Promise<Response>;
+type AppStoreFetcher = (url: string, init?: RequestInit) => Promise<Response>;
 
 const APP_STORE_TIMEOUT_MS = 10_000;
 
 const MAX_ARTWORK_BYTES = 10 * 1024 * 1024;
 
-async function fetchAppStore(url: string, fetcher: AppStoreFetcher): Promise<Response> {
+async function fetchAppStore(
+  url: string,
+  fetcher: AppStoreFetcher,
+  signal?: AbortSignal,
+): Promise<Response> {
   let timer: ReturnType<typeof setTimeout> | undefined;
 
   const timeout = new Promise<never>((_, reject) => {
@@ -381,7 +385,7 @@ async function fetchAppStore(url: string, fetcher: AppStoreFetcher): Promise<Res
   let response: Response;
 
   try {
-    response = await Promise.race([fetcher(url), timeout]);
+    response = await Promise.race([fetcher(url, { signal }), timeout]);
   } finally {
     if (timer !== undefined) clearTimeout(timer);
   }
@@ -391,6 +395,49 @@ async function fetchAppStore(url: string, fetcher: AppStoreFetcher): Promise<Res
   }
 
   return response;
+}
+
+async function readArtworkBody(response: Response, controller: AbortController): Promise<Buffer> {
+  if (!response.body) return Buffer.alloc(0);
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      void reader.cancel();
+      reject(new Error("App Store artwork read timed out"));
+    }, APP_STORE_TIMEOUT_MS);
+  });
+
+  try {
+    while (true) {
+      const chunk = await Promise.race([reader.read(), timeout]);
+
+      if (chunk.done) break;
+
+      total += chunk.value.byteLength;
+
+      if (total > MAX_ARTWORK_BYTES) {
+        controller.abort();
+        await reader.cancel();
+        throw new Error("App Store artwork exceeds the size limit");
+      }
+
+      chunks.push(chunk.value);
+    }
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+    reader.releaseLock();
+  }
+
+  return Buffer.concat(
+    chunks.map((chunk) => Buffer.from(chunk)),
+    total,
+  );
 }
 
 export async function searchAppStore(
@@ -442,18 +489,16 @@ export async function searchAppStore(
       return null;
     }
 
-    const iconRes = await fetchAppStore(iconUrl, fetcher);
+    const artworkController = new AbortController();
+    const iconRes = await fetchAppStore(iconUrl, fetcher, artworkController.signal);
     const contentLength = Number(iconRes.headers.get("content-length"));
 
     if (Number.isFinite(contentLength) && contentLength > MAX_ARTWORK_BYTES) {
+      artworkController.abort();
       throw new Error("App Store artwork exceeds the size limit");
     }
 
-    const iconData = Buffer.from(await iconRes.arrayBuffer());
-
-    if (iconData.length > MAX_ARTWORK_BYTES) {
-      throw new Error("App Store artwork exceeds the size limit");
-    }
+    const iconData = await readArtworkBody(iconRes, artworkController);
 
     return (await Jimp.read(iconData)).resize({ w: ICON_SIZE, h: ICON_SIZE });
   } catch (error) {
@@ -644,6 +689,12 @@ async function applyWithPreview(
   } finally {
     rl.close();
 
-    if (oldIconPath) fs.rmSync(oldIconPath, { force: true });
+    if (oldIconPath) {
+      try {
+        fs.rmSync(oldIconPath, { force: true });
+      } catch {
+        // Best-effort cleanup must not replace the apply result.
+      }
+    }
   }
 }
