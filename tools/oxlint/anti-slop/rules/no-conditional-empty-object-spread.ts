@@ -1,6 +1,7 @@
 import { defineRule } from "@oxlint/plugins";
 import type { ESTree } from "@oxlint/plugins";
 
+/** Removes transparent parentheses from an expression. */
 function unwrapParentheses(node: ESTree.Expression): ESTree.Expression {
   let current = node;
   while (current.type === "ParenthesizedExpression") {
@@ -9,10 +10,12 @@ function unwrapParentheses(node: ESTree.Expression): ESTree.Expression {
   return current;
 }
 
+/** Checks whether an expression is an empty object literal. */
 function isEmptyObjectExpression(node: ESTree.Expression): boolean {
   return node.type === "ObjectExpression" && node.properties.length === 0;
 }
 
+/** Detects a conditional spread whose fallback branch is an empty object. */
 function isConditionalEmptyObjectSpread(node: ESTree.Expression): boolean {
   const conditional = unwrapParentheses(node);
   return (

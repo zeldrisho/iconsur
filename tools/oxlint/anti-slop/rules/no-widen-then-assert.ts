@@ -15,27 +15,32 @@ const functionBoundaryTypes = new Set([
   "TSEmptyBodyFunctionExpression",
 ]);
 
+/** Removes transparent parentheses around an expression. */
 function unwrapExpressionParentheses(expression: ESTree.Expression): ESTree.Expression {
   let current = expression;
   while (current.type === "ParenthesizedExpression") current = current.expression;
   return current;
 }
 
+/** Removes transparent parentheses around a TypeScript type. */
 function unwrapTypeParentheses(type: ESTree.TSType): ESTree.TSType {
   let current = type;
   while (current.type === "TSParenthesizedType") current = current.typeAnnotation;
   return current;
 }
 
+/** Returns the simple identifier used by a type reference. */
 function typeReferenceName(type: ESTree.TSTypeReference): string | null {
   return type.typeName.type === "Identifier" ? type.typeName.name : null;
 }
 
+/** Checks whether a type is the broad `unknown` or `any` type. */
 function isUnknownOrAnyType(type: ESTree.TSType): boolean {
   const unwrapped = unwrapTypeParentheses(type);
   return unwrapped.type === "TSUnknownKeyword" || unwrapped.type === "TSAnyKeyword";
 }
 
+/** Checks whether a Record key type admits every property key. */
 function isBroadRecordKeyType(type: ESTree.TSType): boolean {
   const unwrapped = unwrapTypeParentheses(type);
   if (
@@ -49,6 +54,7 @@ function isBroadRecordKeyType(type: ESTree.TSType): boolean {
   return unwrapped.type === "TSTypeReference" && typeReferenceName(unwrapped) === "PropertyKey";
 }
 
+/** Checks whether a type reference is a broad Record container. */
 function isBroadRecordType(type: ESTree.TSType): boolean {
   const unwrapped = unwrapTypeParentheses(type);
 
@@ -81,6 +87,7 @@ function isBroadRecordType(type: ESTree.TSType): boolean {
   );
 }
 
+/** Classifies a type when it is broad enough to discard value evidence. */
 function broadTypeKind(type: ESTree.TSType): BroadTypeKind | null {
   const unwrapped = unwrapTypeParentheses(type);
   if (unwrapped.type === "TSUnknownKeyword" || unwrapped.type === "TSAnyKeyword") return "top";
@@ -88,12 +95,14 @@ function broadTypeKind(type: ESTree.TSType): BroadTypeKind | null {
   return isBroadRecordType(unwrapped) ? "record" : null;
 }
 
+/** Returns the expression wrapped by a TypeScript assertion. */
 function assertedExpression(
   node: ESTree.TSAsExpression | ESTree.TSTypeAssertion,
 ): ESTree.Expression {
   return unwrapExpressionParentheses(node.expression);
 }
 
+/** Extracts an assertion from an expression after removing parentheses. */
 function assertionFromExpression(
   expression: ESTree.Expression,
 ): ESTree.TSAsExpression | ESTree.TSTypeAssertion | null {
@@ -103,10 +112,12 @@ function assertionFromExpression(
     : null;
 }
 
+/** Normalizes source text for a stable syntactic type comparison. */
 function normalizedTypeText(sourceText: string, type: ESTree.TSType): string {
   return sourceText.slice(type.start, type.end).replaceAll(/\s+/gu, "");
 }
 
+/** Checks whether two type nodes have equivalent normalized source syntax. */
 function typesHaveSameSyntax(
   sourceText: string,
   left: ESTree.TSType | null,
@@ -119,6 +130,7 @@ function typesHaveSameSyntax(
   );
 }
 
+/** Checks whether a type is unambiguously object-shaped. */
 function isDefinitelyObjectType(type: ESTree.TSType): boolean {
   const unwrapped = unwrapTypeParentheses(type);
   switch (unwrapped.type) {
@@ -140,6 +152,7 @@ function isDefinitelyObjectType(type: ESTree.TSType): boolean {
   }
 }
 
+/** Checks whether a Record type provides meaningful key or value evidence. */
 function isDefinitelyNarrowerRecordType(type: ESTree.TSType): boolean {
   const unwrapped = unwrapTypeParentheses(type);
   if (unwrapped.type === "TSTypeLiteral") {
@@ -159,6 +172,7 @@ function isDefinitelyNarrowerRecordType(type: ESTree.TSType): boolean {
   );
 }
 
+/** Finds the nearest function boundary containing a node. */
 function functionBoundary(node: ESTree.Node): ESTree.Node | null {
   let current = node.parent;
   while (current !== null && current.type !== "Program") {
@@ -168,6 +182,7 @@ function functionBoundary(node: ESTree.Node): ESTree.Node | null {
   return null;
 }
 
+/** Resolves an identifier only when it belongs to the current function boundary. */
 function resolvedVariableForIdentifier(
   scopes: readonly {
     readonly references: readonly {
@@ -188,6 +203,7 @@ function resolvedVariableForIdentifier(
   return null;
 }
 
+/** Returns the sole variable declarator associated with a scope variable. */
 function variableDeclarator(variable: Variable): ESTree.VariableDeclarator | null {
   for (const definition of variable.defs) {
     if (definition.type === "Variable" && definition.node.type === "VariableDeclarator") {
@@ -197,6 +213,7 @@ function variableDeclarator(variable: Variable): ESTree.VariableDeclarator | nul
   return null;
 }
 
+/** Determines whether an expression preserves concrete value evidence. */
 function knownValueEvidence(
   expression: ESTree.Expression,
   scopes: Parameters<typeof resolvedVariableForIdentifier>[0],
@@ -260,6 +277,7 @@ function knownValueEvidence(
   );
 }
 
+/** Finds a broad binding that an asserted expression reads from. */
 function widenedBinding(
   variable: Variable,
   scopes: Parameters<typeof resolvedVariableForIdentifier>[0],
@@ -298,6 +316,7 @@ function widenedBinding(
   return evidence === null ? null : { broadKind, evidence, declaredAt: declarator.end, boundary };
 }
 
+/** Checks whether an assertion narrows beyond the source binding's broad type. */
 function assertionIsNarrower(
   sourceText: string,
   broadKind: BroadTypeKind,
@@ -327,6 +346,7 @@ export const noWidenThenAssertRule = defineRule({
   createOnce(context) {
     let scopes: Parameters<typeof resolvedVariableForIdentifier>[0] = [];
 
+    /** Reports an assertion that follows an avoidable broad-type widening. */
     const checkAssertion = (node: ESTree.TSAsExpression | ESTree.TSTypeAssertion) => {
       const expression = assertedExpression(node);
       if (expression.type !== "Identifier") return;

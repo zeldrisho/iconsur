@@ -2,6 +2,7 @@ import type { ESTree } from "@oxlint/plugins";
 
 type VisitorKeys = Readonly<Record<string, readonly string[]>>;
 
+/** Checks whether an unknown value is an ESTree node. */
 function isNode(value: unknown): value is ESTree.Node {
 	return (
 		typeof value === "object" &&
@@ -11,6 +12,7 @@ function isNode(value: unknown): value is ESTree.Node {
 	);
 }
 
+/** Collects infer-bound type parameter names below a type node. */
 function collectInferTypeParameterNames(
 	node: ESTree.Node,
 	visitorKeys: VisitorKeys,

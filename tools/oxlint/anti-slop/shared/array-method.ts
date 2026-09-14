@@ -44,6 +44,7 @@ export function arrayMethodTarget(
   return null;
 }
 
+/** Checks whether a type annotation denotes an array container. */
 function isArrayAnnotation(type: ESTree.TSType): boolean {
   if (type.type === "TSArrayType" || type.type === "TSTupleType") return true;
   if (type.type === "TSParenthesizedType") return isArrayAnnotation(type.typeAnnotation);

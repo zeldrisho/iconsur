@@ -14,6 +14,7 @@ const commentOwnerKinds = new Set([
   "VariableDeclaration",
 ]);
 
+/** Checks whether an assertion is the safe `as const` form. */
 function isConstAssertion(node: TypeAssertion): boolean {
   return (
     node.typeAnnotation.type === "TSTypeReference" &&
@@ -22,6 +23,7 @@ function isConstAssertion(node: TypeAssertion): boolean {
   );
 }
 
+/** Reads valid safety-comment markers from the rule configuration. */
 function configuredSafetyMarkers(option: unknown): readonly string[] {
   if (typeof option !== "object" || option === null || !("markers" in option)) {
     return DEFAULT_SAFETY_MARKERS;
@@ -34,6 +36,7 @@ function configuredSafetyMarkers(option: unknown): readonly string[] {
   return markers.length > 0 ? markers : DEFAULT_SAFETY_MARKERS;
 }
 
+/** Builds the case-insensitive pattern used to find safety markers. */
 function markerPattern(markers: readonly string[]): RegExp {
   const alternation = markers
     .map((marker) => marker.replaceAll(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`))
@@ -44,6 +47,7 @@ function markerPattern(markers: readonly string[]): RegExp {
   );
 }
 
+/** Checks leading source text for a nearby safety justification. */
 function hasSafetyJustificationBefore(
   sourceCode: SourceCode,
   owner: ESTree.Node,
@@ -57,6 +61,7 @@ function hasSafetyJustificationBefore(
     );
 }
 
+/** Checks whether an assertion carries an accepted safety comment. */
 function hasSafetyComment(
   sourceCode: SourceCode,
   node: TypeAssertion,
@@ -109,6 +114,7 @@ export const requireSafetyCommentForTypeAssertionRule = defineRule({
   createOnce(context) {
     const patterns = new Map<string, RegExp>();
 
+    /** Reports a non-const assertion without an accepted safety comment. */
     const checkAssertion = (node: TypeAssertion) => {
       if (isConstAssertion(node)) return;
       const markers = configuredSafetyMarkers(context.options?.[0]);

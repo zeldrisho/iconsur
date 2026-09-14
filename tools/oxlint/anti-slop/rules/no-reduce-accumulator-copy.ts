@@ -8,6 +8,7 @@ import {
   unwrapArrayExpression,
 } from "../shared/array-method.ts";
 
+/** Finds the reducer callback that encloses a node. */
 function enclosingReducer(node: ESTree.Node) {
   let parent = node.parent;
   while (parent !== null) {
@@ -34,6 +35,7 @@ function enclosingReducer(node: ESTree.Node) {
   return null;
 }
 
+/** Checks whether an expression references the current reducer accumulator. */
 function referencesAccumulator(
   sourceCode: SourceCode,
   node: ESTree.Node,
@@ -57,6 +59,7 @@ function referencesAccumulator(
   return false;
 }
 
+/** Checks whether a copy helper resolves to an unshadowed global binding. */
 function isGlobalCopyOwner(sourceCode: SourceCode, node: ESTree.Node, name: string): boolean {
   node = unwrapArrayExpression(node);
   if (node.type !== "Identifier" || node.name !== name) return false;
@@ -84,6 +87,7 @@ export const noReduceAccumulatorCopyRule = defineRule({
           variable.identifiers.some(identifier => identifier.start === reducer.accumulator.start),
         );
         if (accumulator === undefined) return;
+        /** Checks whether an expression is the reducer's accumulator binding. */
         const isAccumulator = (expression: ESTree.Node) =>
           referencesAccumulator(context.sourceCode, expression, accumulator);
         let copiesAccumulator = false;

@@ -4,6 +4,7 @@ import type { ESTree } from "@oxlint/plugins";
 
 type RuntimeFunction = ESTree.ArrowFunctionExpression | ESTree.Function;
 
+/** Checks whether a node is a runtime function with an executable body. */
 function isRuntimeFunction(node: ESTree.Node): node is RuntimeFunction {
 	return (
 		node.type === "ArrowFunctionExpression" ||
@@ -12,6 +13,7 @@ function isRuntimeFunction(node: ESTree.Node): node is RuntimeFunction {
 	);
 }
 
+/** Determines whether a node is inside a TypeScript type-predicate function. */
 function isInsideTypeGuard(node: ESTree.Node): boolean {
 	let current: ESTree.Node | null = node.parent;
 	while (current !== null && current.type !== "Program") {

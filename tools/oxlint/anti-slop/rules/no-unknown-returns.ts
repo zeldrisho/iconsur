@@ -33,6 +33,7 @@ export const noUnknownReturnsRule = defineRule({
   createOnce(context) {
     let environment: TypeAliasEnvironment | null = null;
 
+    /** Checks whether a return type resolves to `unknown`. */
     const resolvesToUnknown = (type: ESTree.TSType): boolean =>
       environment !== null &&
       resolvedTypeMatches(type, environment, (resolved, matches) => {
@@ -53,6 +54,7 @@ export const noUnknownReturnsRule = defineRule({
         return value !== undefined && matches(value);
       });
 
+    /** Reports an unapproved `unknown` function return type. */
     const checkReturnType = (node: FunctionWithReturnType) => {
       const annotation = node.returnType;
       if (annotation === null || annotation === undefined) return;

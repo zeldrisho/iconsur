@@ -5,10 +5,12 @@ import type { ESTree } from "@oxlint/plugins";
 const SERVICE_CONSTRUCTOR_NAME = /^make[A-Z]/u;
 const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
 
+/** Checks whether an import specifier resolves within the current project. */
 function isProjectLocalImport(source: string): boolean {
 	return source.startsWith("./") || source.startsWith("../");
 }
 
+/** Returns the source export name referenced by an import specifier. */
 function getImportedName(specifier: ESTree.ImportSpecifier): string {
 	if (specifier.imported.type === "Identifier") return specifier.imported.name;
 	return specifier.imported.value;

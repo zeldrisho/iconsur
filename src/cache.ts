@@ -16,6 +16,7 @@ export interface CacheCommandResult {
   status: number | null;
 }
 
+/** Runs a cache command through the default synchronous subprocess adapter. */
 let commandRunner = (args: string[]): CacheCommandResult => ({
   status: spawnSync(args[0], args.slice(1), { stdio: "ignore" }).status,
 });

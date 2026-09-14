@@ -3,6 +3,7 @@ import type { ESTree } from "@oxlint/plugins";
 
 const FORBIDDEN_SYMBOL_NAME = "shape";
 
+/** Checks whether a symbol name contains a forbidden shape suffix. */
 function containsForbiddenSymbolName(name: string): boolean {
   return name.toLowerCase().includes(FORBIDDEN_SYMBOL_NAME);
 }
@@ -28,6 +29,7 @@ export const noForbiddenTermInSymbolNamesRule = defineRule({
     },
   },
   createOnce(context) {
+    /** Reports a declaration identifier with a forbidden shape-based name. */
     const reportForbiddenSymbolName = (node: ESTree.Node & { name: string }) => {
       if (!containsForbiddenSymbolName(node.name) || isBorrowedMemberName(node)) return;
       context.report({

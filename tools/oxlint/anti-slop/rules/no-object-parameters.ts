@@ -36,6 +36,7 @@ export const noObjectParametersRule = defineRule({
 	createOnce(context) {
 		let environment: TypeAliasEnvironment | null = null;
 
+		/** Checks whether a type resolves to a structural object type. */
 		const resolvesToObject = (type: ESTree.TSType): boolean =>
 			environment !== null &&
 			resolvedTypeMatches(type, environment, (resolved, matches) => {
@@ -48,6 +49,7 @@ export const noObjectParametersRule = defineRule({
 				);
 			});
 
+		/** Reports object-shaped parameters on a function-like node. */
 		const checkParameters = (node: ParameterOwner) => {
 			for (const parameter of node.params) {
 				const annotation = functionParameterTypeAnnotation(parameter);

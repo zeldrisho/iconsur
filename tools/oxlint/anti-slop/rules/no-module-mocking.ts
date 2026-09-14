@@ -6,11 +6,13 @@ import type { ESTree, SourceCode } from "@oxlint/plugins";
 
 const moduleMockMethods = new Set(["doMock", "mock", "unstable_mockModule"]);
 
+/** Returns the imported identifier name represented by an import node. */
 function importedName(node: ESTree.Node): string | null {
   if (node.type !== "ImportSpecifier") return null;
   return node.imported.type === "Identifier" ? node.imported.name : node.imported.value;
 }
 
+/** Checks whether an expression resolves to an imported test-framework object. */
 function isTestFrameworkObject(
   sourceCode: SourceCode,
   expression: ESTree.Expression,
@@ -37,6 +39,7 @@ function isTestFrameworkObject(
   });
 }
 
+/** Detects a module-mocking call on a supported test-framework import. */
 function moduleMockCall(sourceCode: SourceCode, callee: ESTree.Expression): boolean {
   if (!("property" in callee) || !("object" in callee) || !("computed" in callee)) return false;
   if (!isTestFrameworkObject(sourceCode, callee.object)) return false;

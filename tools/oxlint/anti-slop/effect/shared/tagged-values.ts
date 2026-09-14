@@ -3,11 +3,13 @@ import type { ESTree } from "@oxlint/plugins";
 const equalityOperators = new Set(["==", "===", "!=", "!=="]);
 const broadEffectCatchMethods = new Set(["catch", "catchAll", "catchIf"]);
 
+/** Checks whether a node is a string literal. */
 export const isStringLiteral = (
 	node: ESTree.Node | null | undefined,
 ): node is ESTree.StringLiteral =>
 	node?.type === "Literal" && typeof node.value === "string";
 
+/** Checks whether a member expression reads a conventional `_tag` field. */
 export const isTagMember = (
 	node: ESTree.Node | null | undefined,
 ): node is ESTree.MemberExpression =>
@@ -19,6 +21,7 @@ export const isTagMember = (
 			isStringLiteral(node.property) &&
 			node.property.value === "_tag"));
 
+/** Finds the tagged-value operand in an equality comparison. */
 export const tagMemberFromComparison = (
 	node: ESTree.BinaryExpression,
 ): ESTree.MemberExpression | undefined => {
@@ -28,6 +31,7 @@ export const tagMemberFromComparison = (
 	return undefined;
 };
 
+/** Checks whether a call installs a broad Effect error handler. */
 const isBroadEffectCatchCall = (
 	node: ESTree.Node | null | undefined,
 ): node is ESTree.CallExpression =>
@@ -39,6 +43,7 @@ const isBroadEffectCatchCall = (
 	node.callee.property.type === "Identifier" &&
 	broadEffectCatchMethods.has(node.callee.property.name);
 
+/** Determines whether a node is nested within a broad Effect error handler. */
 export const isInsideBroadEffectHandler = (node: ESTree.Node): boolean => {
 	let current: ESTree.Node | null | undefined = node.parent;
 	while (current !== null && current !== undefined) {
@@ -56,6 +61,7 @@ export const isInsideBroadEffectHandler = (node: ESTree.Node): boolean => {
 	return false;
 };
 
+/** Checks whether a tag access targets an error reason or cause value. */
 export const isReasonTagMember = (node: ESTree.MemberExpression): boolean =>
 	node.object.type === "MemberExpression" &&
 	((!node.object.computed &&
@@ -65,6 +71,7 @@ export const isReasonTagMember = (node: ESTree.MemberExpression): boolean =>
 			isStringLiteral(node.object.property) &&
 			node.object.property.value === "reason"));
 
+/** Returns the static name of an object property, when one is available. */
 export const propertyName = (
 	property: ESTree.ObjectProperty,
 ): string | undefined => {
@@ -80,6 +87,7 @@ export const propertyName = (
 	return undefined;
 };
 
+/** Checks whether an object is being used as an Effect Match pattern. */
 export const isMatchPatternObject = (node: ESTree.ObjectExpression): boolean => {
 	const call = node.parent;
 	if (call?.type !== "CallExpression" || !call.arguments.includes(node)) {

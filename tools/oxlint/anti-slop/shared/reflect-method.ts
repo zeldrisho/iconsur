@@ -2,6 +2,7 @@ import { resolveVariable } from "./scope.ts";
 
 import type { ESTree, SourceCode } from "@oxlint/plugins";
 
+/** Checks whether an expression resolves to the unshadowed global Reflect object. */
 function isGlobalReflect(sourceCode: SourceCode, expression: ESTree.Expression): boolean {
   if (expression.type !== "Identifier" || expression.name !== "Reflect") return false;
   if (sourceCode.isGlobalReference(expression)) return true;

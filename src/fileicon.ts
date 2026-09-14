@@ -218,6 +218,7 @@ interface CustomIconState {
   hasData: boolean;
 }
 
+/** Reads both pieces of state required to recognize a valid custom icon. */
 function customIconState(target: string, opts: FileiconOptions = {}): CustomIconState {
   return { flag: hasCustomIconFlag(target, opts), hasData: hasIconData(target, opts) };
 }

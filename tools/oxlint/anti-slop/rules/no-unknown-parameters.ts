@@ -15,6 +15,7 @@ type ParameterOwner =
   | ESTree.TSFunctionType
   | ESTree.TSMethodSignature;
 
+/** Checks whether a parameter is narrowed by its function's type predicate. */
 function isTypePredicateSubject(owner: ParameterOwner, parameterName: string): boolean {
   const predicate = owner.returnType?.typeAnnotation;
   return (
@@ -38,6 +39,7 @@ export const noUnknownParametersRule = defineRule({
     },
   },
   createOnce(context) {
+    /** Reports unapproved `unknown` types in a function's parameters. */
     const checkParameters = (node: ParameterOwner) => {
       for (const parameter of node.params) {
         const annotation = functionParameterTypeAnnotation(parameter);

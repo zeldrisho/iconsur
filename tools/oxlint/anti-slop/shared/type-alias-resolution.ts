@@ -31,6 +31,7 @@ export type ResolvedTypeMatcher = (
 
 const environmentsByProgram = new WeakMap<ESTree.Program, TypeAliasEnvironment>();
 
+/** Checks whether an unknown value is an ESTree node. */
 function isNode(value: unknown): value is ESTree.Node {
 	return (
 		typeof value === "object" &&
@@ -40,6 +41,7 @@ function isNode(value: unknown): value is ESTree.Node {
 	);
 }
 
+/** Finds the nearest lexical scope that can own type declarations. */
 function enclosingTypeScope(node: ESTree.Node): TypeScope {
 	let current: ESTree.Node | null = node.parent;
 	while (current !== null) {
@@ -57,6 +59,7 @@ function enclosingTypeScope(node: ESTree.Node): TypeScope {
 	return node;
 }
 
+/** Extracts a named type binding and its owning lexical scope. */
 function declaredTypeBinding(node: ESTree.Node): {
 	readonly alias: ESTree.TSTypeAliasDeclaration | null;
 	readonly name: string;
@@ -82,6 +85,7 @@ function declaredTypeBinding(node: ESTree.Node): {
 	return null;
 }
 
+/** Collects lexical type declarations throughout a program. */
 function collectTypeBindings(
 	node: ESTree.Node,
 	visitorKeys: VisitorKeys,
@@ -128,6 +132,7 @@ export function createTypeAliasEnvironment(
 	return environment;
 }
 
+/** Measures the parent-chain distance from a node to an ancestor. */
 function ancestorDistance(ancestor: ESTree.Node, node: ESTree.Node): number | null {
 	let current: ESTree.Node | null = node;
 	let distance = 0;
@@ -139,6 +144,7 @@ function ancestorDistance(ancestor: ESTree.Node, node: ESTree.Node): number | nu
 	return null;
 }
 
+/** Returns the nearest visible bindings with a requested type name. */
 function nearestTypeBindings(
 	name: string,
 	use: ESTree.Node,
@@ -183,10 +189,12 @@ export function hasVisibleTypeBinding(
 	);
 }
 
+/** Returns the simple identifier used by a type reference. */
 function typeReferenceName(type: ESTree.TSTypeReference): string | null {
 	return type.typeName.type === "Identifier" ? type.typeName.name : null;
 }
 
+/** Maps an alias's generic parameters to supplied or default arguments. */
 function aliasSubstitutions(
 	alias: ESTree.TSTypeAliasDeclaration,
 	reference: ESTree.TSTypeReference,
@@ -214,6 +222,7 @@ export function resolvedTypeMatches(
 	environment: TypeAliasEnvironment,
 	matcher: ResolvedTypeMatcher,
 ): boolean {
+	/** Recursively evaluates a type and its visible aliases against a predicate. */
 	const evaluate = (
 		current: ESTree.TSType,
 		substitutions: Substitutions,

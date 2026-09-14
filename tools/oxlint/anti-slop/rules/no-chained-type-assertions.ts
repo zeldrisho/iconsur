@@ -3,10 +3,12 @@ import type { ESTree } from "@oxlint/plugins";
 
 type TypeAssertionExpression = ESTree.TSAsExpression | ESTree.TSTypeAssertion;
 
+/** Checks whether a node is either TypeScript assertion expression form. */
 function isTypeAssertionExpression(node: ESTree.Node): node is TypeAssertionExpression {
   return node.type === "TSAsExpression" || node.type === "TSTypeAssertion";
 }
 
+/** Removes transparent parentheses around an expression. */
 function unwrapParenthesizedExpression(expression: ESTree.Expression): ESTree.Expression {
   let current = expression;
   while (current.type === "ParenthesizedExpression") {
@@ -15,6 +17,7 @@ function unwrapParenthesizedExpression(expression: ESTree.Expression): ESTree.Ex
   return current;
 }
 
+/** Checks whether a type assertion is the special `as const` form. */
 function isConstAssertion(node: TypeAssertionExpression): boolean {
   const { typeAnnotation } = node;
   return (
@@ -24,6 +27,7 @@ function isConstAssertion(node: TypeAssertionExpression): boolean {
   );
 }
 
+/** Checks whether an assertion is the outermost member of its assertion chain. */
 function isOutermostAssertionInChain(node: TypeAssertionExpression): boolean {
   let current: ESTree.Expression = node;
   let parent = node.parent;
@@ -36,6 +40,7 @@ function isOutermostAssertionInChain(node: TypeAssertionExpression): boolean {
   return !isTypeAssertionExpression(parent) || parent.expression !== current;
 }
 
+/** Detects a multi-assertion chain that contains a non-const assertion. */
 function isForbiddenAssertionChain(node: TypeAssertionExpression): boolean {
   let assertionCount = 0;
   let hasNonConstAssertion = false;
@@ -64,6 +69,7 @@ export const noChainedTypeAssertionsRule = defineRule({
     },
   },
   createOnce(context) {
+    /** Reports a forbidden assertion chain at its outermost node. */
     const checkTypeAssertion = (node: TypeAssertionExpression) => {
       if (!isOutermostAssertionInChain(node) || !isForbiddenAssertionChain(node)) return;
       context.report({ node, messageId: "chained" });

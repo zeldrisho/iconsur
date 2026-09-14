@@ -24,6 +24,7 @@ export const noUnknownTypeAliasesRule = defineRule({
 	createOnce(context) {
 		let environment: TypeAliasEnvironment | null = null;
 
+		/** Checks whether an aliased type resolves to `unknown`. */
 		const resolvesToUnknown = (type: ESTree.TSType): boolean =>
 			environment !== null &&
 			resolvedTypeMatches(type, environment, (resolved, matches) => {

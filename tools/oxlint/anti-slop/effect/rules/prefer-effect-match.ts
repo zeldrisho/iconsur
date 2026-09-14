@@ -15,10 +15,12 @@ export const preferEffectMatchRule = defineRule({
 		},
 	},
 	createOnce(context) {
+		/** Checks whether a branch discriminator is a supported literal. */
 		const isLiteral = (node: ESTree.Node): boolean =>
 			node.type === "Literal" ||
 			(node.type === "TemplateLiteral" && node.expressions.length === 0);
 
+		/** Extracts the consistently compared value from a conditional chain. */
 		const comparedValue = (node: ESTree.Expression): string | undefined => {
 			if (
 				node.type !== "BinaryExpression" ||
