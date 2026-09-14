@@ -195,6 +195,9 @@ importers:
         specifier: ^5.0.0
         version: 5.0.0
     devDependencies:
+      '@oxlint/plugins':
+        specifier: 1.79.0
+        version: 1.79.0
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.3
