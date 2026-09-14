@@ -2,20 +2,22 @@
 
 ## Toolchain
 
-- Use Vite+ (`vp`) with pnpm; versions are pinned in `package.json` and `pnpm-workspace.yaml`.
+- Use Vite+ (`vp`) commands; versions are pinned in `package.json` and workspace configuration.
 - Use Vite+'s bundled tools instead of adding standalone lint, formatter, bundler, or test-runner dependencies.
 
 ## Commands
 
-| Task                 | Command                     |
-| -------------------- | --------------------------- |
-| Install              | `vp install`                |
-| Check a file         | `vp check src/cli.ts`       |
-| Test a file          | `vp test tests/cli.test.ts` |
-| Full validation      | `vp check && vp test`       |
-| Build macOS binaries | `vp run build`              |
+| Task                  | Command                     |
+| --------------------- | --------------------------- |
+| Install               | `vp install`                |
+| Check a file          | `vp check src/cli.ts`       |
+| Test a file           | `vp test tests/cli.test.ts` |
+| Full validation       | `vp check && vp test`       |
+| ScriptC compatibility | `vp run scriptc:coverage`   |
+| Build macOS binaries  | `vp run build`              |
 
 - Use `vp run build`, not `vp build`.
+- `scriptc:coverage` is experimental; production binaries remain built with `pkg` until native compatibility is proven.
 - CI runs on macOS and smoke-tests the native binary.
 
 ## Conventions

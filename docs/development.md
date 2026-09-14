@@ -21,9 +21,17 @@ Use `--output` to avoid modifying an app bundle. Standard checks are:
 vp check       # format, lint, and type-check
 vp test        # tests in tests/
 vp run build   # bundle and macOS arm64/x64 binaries
+vp run scriptc:coverage  # optional native-compiler compatibility report
 ```
 
 `dist/` is generated output. Source imports use `.ts` extensions. Tests belong in `tests/*.test.ts` and import APIs from `vite-plus/test`. Do not run `vp migrate`; this is a CLI rather than a Vite application.
+
+`scriptc:coverage` is an opt-in experiment for evaluating a future Node-free
+binary. It downloads the pinned experimental ScriptC release through `vp dlx`
+and reports static, dynamic, and unsupported code paths. The production
+`build` remains on `@yao-pkg/pkg` until the report and native smoke tests show
+that image decoding, assets, networking, subprocesses, and privilege
+escalation are compatible.
 
 ## Manual macOS verification
 

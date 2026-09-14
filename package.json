@@ -17,6 +17,7 @@
   "type": "module",
   "scripts": {
     "build": "vp pack && cp src/mask.png dist/ && rm -f dist/iconsur-* && pkg -c .pkgrc.json dist/index.cjs --targets node24-macos-arm64,node24-macos-x64 --output dist/iconsur",
+    "scriptc:coverage": "vp dlx --silent scriptc@0.0.36 coverage src/index.ts --dynamic --external-types icns-lib=src/types/icns-lib.d.ts",
     "check": "vp check",
     "prepack": "vp pack --no-clean && cp src/mask.png dist/ && rm -f dist/iconsur-*",
     "test": "vp test"
