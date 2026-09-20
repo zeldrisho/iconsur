@@ -1,11 +1,21 @@
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@0.3.1
-  vite-plus: 0.3.1
+  vite: npm:@voidzero-dev/vite-plus-core@0.3.3
+  vite-plus: 0.3.3
+minimumReleaseAge: 10080
+minimumReleaseAgeExclude:
+  - vite-plus
+  - "@voidzero-dev/*"
+  - "@oxc-project/*"
+  - "@oxfmt/*"
+  - "@oxlint/*"
+  - oxfmt
+  - oxlint
+trustPolicy: no-downgrade
+blockExoticSubdeps: true
 allowBuilds:
   esbuild: true
 overrides:
   vite@*: "catalog:"
-  vitest: 4.1.11
 peerDependencyRules:
   allowAny:
     - vite

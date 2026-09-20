@@ -87,8 +87,6 @@ export default defineConfig({
     dts: false,
     // Bundle every dependency into the single CJS file used by pkg. Node
     // built-ins stay external.
-    deps: {
-      alwaysBundle: [/.*/],
-    },
+    deps: { resolveDepSubpath: true, alwaysBundle: [/.*/] },
   },
 });

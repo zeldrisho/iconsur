@@ -17,13 +17,6 @@ function tempPath(prefix: string): string {
  * the directory name and `AppIcon.icns`).
  */
 export function readInfoPlist(infoPlistPath: string): Record<string, unknown> | null {
-  try {
-    return parse(fs.readFileSync(infoPlistPath, "utf8")) as Record<string, unknown>;
-  } catch {
-    // Not a (readable) XML plist -- fall through to `plutil`, which also
-    // handles binary plists.
-  }
-
   const convertedPlist = tempPath("tmp-plist");
 
   try {
@@ -35,9 +28,17 @@ export function readInfoPlist(infoPlistPath: string): Record<string, unknown> | 
       },
     );
 
-    if (res.status !== 0) {
-      return null;
+    if (res.status === null) {
+      // `plutil` is unavailable outside macOS; parse readable XML directly in
+      // development and tests. Binary plists still correctly fall back.
+      const source = fs.readFileSync(infoPlistPath, "utf8").trimStart();
+
+      if (!source.startsWith("<")) return null;
+
+      return parse(source) as Record<string, unknown>;
     }
+
+    if (res.status !== 0) return null;
 
     return parse(fs.readFileSync(convertedPlist, "utf8")) as Record<string, unknown>;
   } catch {

@@ -67,6 +67,7 @@ describe("native fileicon operations", () => {
       setFileiconCommandRunner(previous);
     }
 
+    expect(calls).toHaveLength(1);
     expect(calls[0]).toEqual(["osascript", "-e", SET_ICON_SCRIPT, "--", icon, target]);
   });
 
