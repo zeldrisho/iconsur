@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.2] - 2026-09-20
+
 ### Changed
 
 - Use AppKit APIs for setting and removing custom icons without invoking external commands.
@@ -59,7 +61,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 This fork begins from the upstream `1.7.0` release. See the [upstream release](https://github.com/rikumi/iconsur/releases/tag/1.7.0) for its historical changes.
 
-[Unreleased]: https://github.com/zeldrisho/iconsur/compare/v2.2.1...HEAD
+[Unreleased]: https://github.com/zeldrisho/iconsur/compare/v2.2.2...HEAD
+[2.2.2]: https://github.com/zeldrisho/iconsur/compare/v2.2.1...v2.2.2
 [2.2.1]: https://github.com/zeldrisho/iconsur/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/zeldrisho/iconsur/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/zeldrisho/iconsur/compare/v2.0.1...v2.1.0
