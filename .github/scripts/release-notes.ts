@@ -29,7 +29,7 @@ const section = lines
   .join("\n")
   .trim()
   .replace(
-    new RegExp(`^## \\[${version.replaceAll(".", "\\.")}\\]`, "m"),
+    headingPrefix,
     `## [${version}](https://github.com/zeldrisho/iconsur/releases/tag/v${version})`,
   );
 
