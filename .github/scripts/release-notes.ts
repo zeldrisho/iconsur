@@ -27,6 +27,10 @@ const nextHeadingIndex = lines.findIndex(
 const section = lines
   .slice(headingIndex, nextHeadingIndex < 0 ? undefined : nextHeadingIndex)
   .join("\n")
-  .trim();
+  .trim()
+  .replace(
+    new RegExp(`^## \\[${version.replaceAll(".", "\\.")}\\]`, "m"),
+    `## [${version}](https://github.com/zeldrisho/iconsur/releases/tag/v${version})`,
+  );
 
 process.stdout.write(section + "\n");
