@@ -25,7 +25,7 @@
 - Do not hand-edit vendored `src/openjpeg.ts` or `src/mask.png`.
 - Treat `dist/` as generated build output.
 - Follow `docs/architecture.md` for subprocesses, path handling, and privilege escalation.
-- Keep `CHANGELOG.md` manually curated; release notes are extracted by `scripts/release-notes.ts`.
+- Keep `CHANGELOG.md` manually curated; release notes are extracted by `.github/scripts/release-notes.ts`.
 
 ## References
 

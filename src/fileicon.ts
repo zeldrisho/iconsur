@@ -3,17 +3,15 @@
 // Mirrors upstream v0.3.5 semantics:
 // - `set` uses AppleScript-ObjC (`osascript`) to call NSWorkspace setIcon —
 //   upstream's python3-based path died with macOS 12.3.
-// - `rm` clears the custom-icon flag in `com.apple.FinderInfo`, then removes
-//   the `Icon\r` helper file (folder targets such as `.app` bundles) or the
-//   resource fork (file targets).
+// - `unset` clears a custom icon through NSWorkspace's AppKit API, which removes
+//   both the FinderInfo flag and icon payload.
 //
-// Security invariant: the AppleScript program is a constant; the user-supplied
+// Security invariant: the AppleScript programs are constant; user-supplied
 // paths are passed to `osascript` as argv (after `--`), never shell- or
-// script-interpolated. `osascript` ships with macOS and stays a runtime
-// dependency; `xattr` / `rm` are invoked with static argv too.
+// script-interpolated. `osascript` ships with macOS and is the only runtime
+// dependency used to modify icon metadata.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
-import path from "node:path";
 
 /** Constant AppleScript-ObjC program; argv = [sourceImagePath, destPath]. */
 export const SET_ICON_SCRIPT = [
@@ -38,7 +36,20 @@ export const SET_ICON_SCRIPT = [
   "  current application's NSRectFill(current application's NSMakeRect(0, 0, canvasSide, canvasSide))",
   "  sourceImage's drawInRect:(current application's NSMakeRect(drawOriginX, drawOriginY, drawWidth, drawHeight)) fromRect:(current application's NSZeroRect) operation:(current application's NSCompositingOperationSourceOver) fraction:1.0",
   "  squareImage's unlockFocus()",
-  "  (current application's NSWorkspace's sharedWorkspace()'s setIcon:squareImage forFile:destPath options:2)",
+  "  if not (current application's NSWorkspace's sharedWorkspace()'s setIcon:squareImage forFile:destPath options:2) then error \"NSWorkspace could not set the icon\"",
+
+  "end run",
+  "",
+].join("\n");
+
+/** Constant AppleScript-ObjC program; argv = [destPath]. */
+export const REMOVE_ICON_SCRIPT = [
+  'use framework "AppKit"',
+  "",
+  "on run argv",
+  "  set destPath to (item 1 of argv)",
+  "  if not (current application's NSWorkspace's sharedWorkspace()'s setIcon:(missing value) forFile:destPath options:0) then error \"NSWorkspace could not remove the icon\"",
+
   "end run",
   "",
 ].join("\n");
@@ -49,23 +60,11 @@ export interface FileiconOptions {
   sudo?: boolean;
 }
 
-/** Hidden helper file holding a folder's custom icon (with its resource fork). */
-const FOLDER_CUSTOM_ICON = "Icon\r";
-
-/** FinderInfo attribute carrying the custom-icon flag (folder and file). */
-const FINDER_INFO_ATTRIB = "com.apple.FinderInfo";
-
-/** Resource fork attribute holding the icon payload for file targets. */
-const RESOURCE_FORK_ATTRIB = "com.apple.ResourceFork";
-
 /** Byte offset (0-based) of the flags byte inside the 32-byte FinderInfo struct. */
 const CUSTOM_ICON_BYTE_OFFSET = 8;
 
 /** The `custom icon` flag bit in that byte. */
 const CUSTOM_ICON_FLAG = 0x04;
-
-/** Lowercase 'icns' magic found inside an icon-bearing resource fork. */
-const ICNS_RESOURCE_MAGIC = "icns";
 
 /** Result of a native command invocation. */
 export interface FileiconCommandResult {
@@ -131,33 +130,6 @@ export function runWithEscalation(
   op({ sudo: true });
 }
 
-/** Reads an extended attribute as a hex string, or null when absent/unreadable. */
-function readXattr(target: string, name: string, opts: FileiconOptions = {}): string | null {
-  const res = run(["xattr", "-px", name, target], opts);
-
-  if (res.status === null) {
-    throw new Error(`Failed to execute xattr while reading '${name}' from ${target}`);
-  }
-
-  if (res.status !== 0) {
-    // xattr uses a non-zero status for both an absent attribute and genuine
-    // I/O/permission failures. Only documented absence messages are benign.
-    if (/no such xattr|attribute not found/i.test(res.stderr)) {
-      return null;
-    }
-
-    if (res.stderr.trim() !== "") {
-      throw new Error(
-        `Failed to read '${name}' from ${target} (xattr exited with status ${res.status}: ${res.stderr.trim()})`,
-      );
-    }
-
-    return null;
-  }
-
-  return res.stdout.replace(/\s/g, "");
-}
-
 /** Clears the custom-icon flag in a FinderInfo hex string; null when fully blank. */
 export function clearCustomIconFlag(hex: string): string | null {
   const flagEnd = (CUSTOM_ICON_BYTE_OFFSET + 1) * 2;
@@ -175,59 +147,6 @@ export function clearCustomIconFlag(hex: string): string | null {
     hex.slice(flagEnd);
 
   return /^0+$/.test(out) ? null : out;
-}
-
-/** True when the target's FinderInfo has the custom-icon flag set. */
-function hasCustomIconFlag(target: string, opts: FileiconOptions = {}): boolean {
-  const hex = readXattr(target, FINDER_INFO_ATTRIB, opts);
-
-  if (hex === null || hex.length < (CUSTOM_ICON_BYTE_OFFSET + 1) * 2) {
-    return false;
-  }
-
-  return (
-    (parseInt(hex.slice(CUSTOM_ICON_BYTE_OFFSET * 2, (CUSTOM_ICON_BYTE_OFFSET + 1) * 2), 16) &
-      CUSTOM_ICON_FLAG) !==
-    0
-  );
-}
-
-/**
- * True when actual icon payload exists: for a folder, the `Icon\r` helper
- * file with an icns resource in its fork; for a file, its own resource fork.
- */
-function hasIconData(target: string, opts: FileiconOptions = {}): boolean {
-  const stat = fs.statSync(target, { throwIfNoEntry: false });
-  const helper = stat?.isDirectory() ? path.join(target, FOLDER_CUSTOM_ICON) : target;
-
-  if (!fs.existsSync(helper)) {
-    return false;
-  }
-
-  const resourceFork = readXattr(helper, RESOURCE_FORK_ATTRIB, opts);
-
-  return (
-    resourceFork !== null &&
-    Buffer.from(resourceFork, "hex").includes(Buffer.from(ICNS_RESOURCE_MAGIC, "ascii"))
-  );
-}
-
-/** Snapshot of the target's custom-icon flag and payload presence. */
-interface CustomIconState {
-  flag: boolean;
-  hasData: boolean;
-}
-
-/** Reads both pieces of state required to recognize a valid custom icon. */
-function customIconState(target: string, opts: FileiconOptions = {}): CustomIconState {
-  return { flag: hasCustomIconFlag(target, opts), hasData: hasIconData(target, opts) };
-}
-
-/** True when the target currently has a custom icon (flag + payload). */
-export function hasCustomIcon(target: string, opts: FileiconOptions = {}): boolean {
-  const state = customIconState(target, opts);
-
-  return state.flag && state.hasData;
 }
 
 /**
@@ -250,86 +169,23 @@ export function setCustomIcon(
       `osascript exited with status ${res.status}: ${res.stderr.trim() || "unknown error"}`,
     );
   }
-
-  // NSWorkspace setIcon reports success even for corrupt images; verify like
-  // upstream v0.3.5's testForCustomIcon.
-  const state = customIconState(destPath, opts);
-
-  if (!state.flag) {
-    throw new Error(
-      `Failed to set the custom-icon flag in '${FINDER_INFO_ATTRIB}' of ${destPath}. ` +
-        "Typically the target is on a volume that does not support custom icons; re-run with unset to clean up.",
-    );
-  }
-
-  if (!state.hasData) {
-    throw new Error(
-      `Custom-icon flag was set for ${destPath} but no icon data was found; re-run with unset to clean up.`,
-    );
-  }
 }
 
 /**
  * Removes a custom icon from a file or folder (.app bundle), mirroring
- * upstream v0.3.5's removeCustomIcon. Throws when xattr or rm fails, so
- * permission, authentication, and I/O failures surface to the caller
- * instead of being reported as success.
+ * upstream v0.3.5's removeCustomIcon. NSWorkspace removes both the FinderInfo
+ * flag and icon payload in one native operation.
  */
 export function removeCustomIcon(destPath: string, opts: FileiconOptions = {}): void {
-  const stat = fs.statSync(destPath, { throwIfNoEntry: false });
-
-  if (!stat) {
+  if (!fs.existsSync(destPath)) {
     throw new Error(`Target not found: ${destPath}`);
   }
 
-  // Step 1: clear the custom-icon flag in com.apple.FinderInfo.
-  // An already-absent attribute (readXattr -> null) counts as success.
-  const hex = readXattr(destPath, FINDER_INFO_ATTRIB, opts);
+  const res = run(["osascript", "-e", REMOVE_ICON_SCRIPT, "--", destPath], opts);
 
-  if (hex !== null) {
-    const patched = clearCustomIconFlag(hex);
-
-    if (patched === null) {
-      // All bytes cleared -> drop the attribute entirely.
-      const res = run(["xattr", "-d", FINDER_INFO_ATTRIB, destPath], opts);
-
-      if (res.status !== 0) {
-        throw new Error(
-          `Failed to remove '${FINDER_INFO_ATTRIB}' from ${destPath} ` +
-            `(xattr exited with status ${res.status}: ${res.stderr.trim() || "unknown error"})`,
-        );
-      }
-    } else if (patched !== hex) {
-      const res = run(["xattr", "-wx", FINDER_INFO_ATTRIB, patched, destPath], opts);
-
-      if (res.status !== 0) {
-        throw new Error(
-          `Failed to clear the custom-icon flag in '${FINDER_INFO_ATTRIB}' of ${destPath} ` +
-            `(xattr exited with status ${res.status}: ${res.stderr.trim() || "unknown error"})`,
-        );
-      }
-    }
-  }
-
-  // Step 2: remove the icon payload — the `Icon\r` helper file for folders,
-  // or the resource fork for plain files.
-  if (stat.isDirectory()) {
-    const res = run(["rm", "-f", path.join(destPath, FOLDER_CUSTOM_ICON)], opts);
-
-    if (res.status !== 0) {
-      throw new Error(
-        `Failed to remove '${FOLDER_CUSTOM_ICON}' from ${destPath} ` +
-          `(rm exited with status ${res.status}: ${res.stderr.trim() || "unknown error"})`,
-      );
-    }
-  } else if (hasIconData(destPath, opts)) {
-    const res = run(["xattr", "-d", RESOURCE_FORK_ATTRIB, destPath], opts);
-
-    if (res.status !== 0) {
-      throw new Error(
-        `Failed to remove '${RESOURCE_FORK_ATTRIB}' from ${destPath} ` +
-          `(xattr exited with status ${res.status}: ${res.stderr.trim() || "unknown error"})`,
-      );
-    }
+  if (res.status !== 0) {
+    throw new Error(
+      `osascript exited with status ${res.status}: ${res.stderr.trim() || "unknown error"}`,
+    );
   }
 }

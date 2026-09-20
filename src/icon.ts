@@ -324,13 +324,7 @@ export function resolveIdentity(appDir: string, opts: IconOptions): AppIdentity 
   const parsed = readInfoPlist(infoPlist);
 
   if (parsed === null) {
-    console.log(
-      "Plist file might be corrupted; using fallback name and AppIcon.icns as default icon location.",
-    );
-    console.log("Re-run with option -k or --keyword to specify custom app name to search for.");
-    console.log(
-      "Re-run with option -i or --input to specify custom input image for an adaptive icon.",
-    );
+    console.warn("Could not read Info.plist; using the app name and AppIcon.icns as fallback.");
   } else {
     if (!appName) {
       appName =
@@ -445,8 +439,6 @@ export async function searchAppStore(
   region: string,
   fetcher: AppStoreFetcher = (url) => fetch(url),
 ): Promise<JimpInstance | null> {
-  console.log(`Searching iOS App with name: ${appName}`);
-
   try {
     const url =
       `https://itunes.apple.com/search?media=software&entity=software%2CiPadSoftware` +
@@ -471,20 +463,15 @@ export async function searchAppStore(
           : undefined;
 
     if (!app || typeof app.trackName !== "string") {
-      console.log(`Cannot find iOS App with name: ${appName}`);
+      console.warn(`No App Store result for “${appName}”; using the bundled icon.`);
 
       return null;
     }
 
-    console.log(`Found iOS app: ${app.trackName} with icon: ${iconUrl}`);
-    console.log(
-      "If this app is incorrect, specify the correct name with -k or --keyword, or generate an icon locally with option -l or --local",
-    );
+    console.log(`Using App Store icon: ${app.trackName}`);
 
     if (!iconUrl) {
-      console.log(
-        "No artwork URL returned by the App Store search; falling back to local generation.",
-      );
+      console.warn("The App Store result has no artwork; using the bundled icon.");
 
       return null;
     }
@@ -502,8 +489,8 @@ export async function searchAppStore(
 
     return (await Jimp.read(iconData)).resize({ w: ICON_SIZE, h: ICON_SIZE });
   } catch (error) {
-    console.log(
-      `App Store lookup failed; falling back to local generation: ${error instanceof Error ? error.message : String(error)}`,
+    console.warn(
+      `App Store lookup failed; using the bundled icon (${error instanceof Error ? error.message : String(error)}).`,
     );
 
     return null;
@@ -515,8 +502,6 @@ export async function searchAppStore(
  * which may be a JP2 decoded by our custom format) or a custom input image.
  */
 async function generateLocalIcon(identity: AppIdentity, opts: IconOptions): Promise<JimpInstance> {
-  console.log("Generating adaptive icon...");
-
   if (!fs.existsSync(identity.iconPath)) {
     throw new Error(`Cannot find icon at ${identity.iconPath}`);
   }
@@ -542,7 +527,6 @@ async function generateLocalIcon(identity: AppIdentity, opts: IconOptions): Prom
       );
     }
 
-    console.log(`Decoded legacy ICNS icon (${legacy.width}x${legacy.width})`);
     originalIcon = jimpFromRgba(legacy.width, legacy.data);
   }
 
@@ -564,7 +548,6 @@ async function generateLocalIcon(identity: AppIdentity, opts: IconOptions): Prom
       h: ICON_SIZE * originalIconScaleSize,
     });
   } else {
-    console.log("The original icon image is opaque; thus it will not be scaled down.");
     originalIconScaleSize = 1;
     originalIcon.cover({ w: ICON_SIZE, h: ICON_SIZE });
   }
@@ -578,8 +561,6 @@ async function generateLocalIcon(identity: AppIdentity, opts: IconOptions): Prom
 
 /** Generates and applies (or saves) an adaptive icon for one app bundle. */
 export async function processApp(appDir: string, opts: IconOptions): Promise<void> {
-  console.log(`Processing ${appDir}...`);
-
   const resolved = path.resolve(process.cwd(), appDir);
   const stat = fs.statSync(resolved, { throwIfNoEntry: false });
 
@@ -665,10 +646,7 @@ async function applyWithPreview(
 
   try {
     const prompt = [
-      `Generated preview at ${previewPath}`,
-      oldIconPath
-        ? "Opening the preview and the current icon in Preview for comparison..."
-        : "Opening the preview in Preview for comparison...",
+      oldIconPath ? "Preview opened for comparison." : "Preview opened.",
       `Apply icon to ${appDir}? [Y/n] `,
     ].join("\n");
 
@@ -677,10 +655,7 @@ async function applyWithPreview(
     });
 
     if (!parseApplyAnswer(answer)) {
-      console.log(`\nIcon not applied. Preview kept at ${previewPath}.`);
-      console.log(
-        `Re-run the same command to apply it, or revert an applied icon with: iconsur unset ${appDir}`,
-      );
+      console.log(`\nIcon not applied. Preview saved at ${previewPath}.`);
 
       return false;
     }

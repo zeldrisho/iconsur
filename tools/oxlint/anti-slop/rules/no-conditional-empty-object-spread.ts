@@ -1,5 +1,5 @@
-import { defineRule } from "@oxlint/plugins";
-import type { ESTree } from "@oxlint/plugins";
+import { defineRule } from "vite-plus/lint/plugins";
+import type { ESTree } from "vite-plus/lint/plugins";
 
 /** Removes transparent parentheses from an expression. */
 function unwrapParentheses(node: ESTree.Expression): ESTree.Expression {

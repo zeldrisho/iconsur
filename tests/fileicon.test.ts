@@ -4,6 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import {
   clearCustomIconFlag,
+  REMOVE_ICON_SCRIPT,
+  removeCustomIcon,
   runWithEscalation,
   setCustomIcon,
   setFileiconCommandRunner,
@@ -65,6 +67,7 @@ describe("native fileicon operations", () => {
       setFileiconCommandRunner(previous);
     }
 
+    expect(calls).toHaveLength(1);
     expect(calls[0]).toEqual(["osascript", "-e", SET_ICON_SCRIPT, "--", icon, target]);
   });
 
@@ -78,6 +81,29 @@ describe("native fileicon operations", () => {
       "Testing",
     );
     expect(elevated).toBe(true);
+  });
+
+  it("removes icons through NSWorkspace without shell metadata utilities", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "iconsur-fileicon-"));
+    const target = path.join(root, "App.app");
+    fs.mkdirSync(target);
+    const calls: string[][] = [];
+
+    const previous = setFileiconCommandRunner((args) => {
+      calls.push(args);
+
+      return { status: 0, stdout: "", stderr: "" };
+    });
+
+    try {
+      removeCustomIcon(target);
+    } finally {
+      setFileiconCommandRunner(previous);
+    }
+
+    expect(calls).toEqual([["osascript", "-e", REMOVE_ICON_SCRIPT, "--", target]]);
+    expect(calls.flat()).not.toContain("xattr");
+    expect(calls.flat()).not.toContain("rm");
   });
 
   it("surfaces osascript failures", () => {

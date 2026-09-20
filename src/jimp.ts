@@ -31,10 +31,43 @@ export function planarToInterleaved(data: Buffer): Buffer {
  * Decodes a JP2 buffer with the vendored OpenJPEG build and converts its
  * planar RGBA output into the interleaved RGBA layout jimp expects.
  */
-export function decodeJp2(buffer: Buffer): DecodedImage {
-  const { width, height, data } = openjpeg(buffer, "jp2");
+const OPENJPEG_DIAGNOSTIC =
+  /^(?:\[INFO\]|Warning: Enlarging memory arrays|Raw image characteristics:|Component \d+ characteristics:|Successfully generated Outfile image\.raw)/;
 
-  return { width, height, data: planarToInterleaved(data) };
+/** Decodes OpenJPEG while hiding its routine progress output from end users. */
+export function decodeJp2(buffer: Buffer): DecodedImage {
+  const stdoutWrite = process.stdout.write.bind(process.stdout);
+  const stderrWrite = process.stderr.write.bind(process.stderr);
+
+  const quietStdoutWrite = (...args: Parameters<typeof process.stdout.write>) => {
+    const chunk = args[0];
+    const text = typeof chunk === "string" ? chunk : Buffer.from(chunk).toString();
+
+    if (OPENJPEG_DIAGNOSTIC.test(text)) return true;
+
+    return stdoutWrite(...args);
+  };
+
+  const quietStderrWrite = (...args: Parameters<typeof process.stderr.write>) => {
+    const chunk = args[0];
+    const text = typeof chunk === "string" ? chunk : Buffer.from(chunk).toString();
+
+    if (OPENJPEG_DIAGNOSTIC.test(text)) return true;
+
+    return stderrWrite(...args);
+  };
+
+  process.stdout.write = quietStdoutWrite as typeof process.stdout.write;
+  process.stderr.write = quietStderrWrite as typeof process.stderr.write;
+
+  try {
+    const { width, height, data } = openjpeg(buffer, "jp2");
+
+    return { width, height, data: planarToInterleaved(data) };
+  } finally {
+    process.stdout.write = stdoutWrite;
+    process.stderr.write = stderrWrite;
+  }
 }
 
 /** Decode-only JP2 format plugin; JPEG 2000 encoding is out of scope. */
